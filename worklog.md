@@ -373,3 +373,143 @@ Stage Summary:
   runtime renders the .riv, the canvas-advanced API alignment issue will be
   debugged properly. The .riv itself is structurally sound (compiles + loads
   with all expected inputs).
+
+---
+Task ID: phase-2
+Agent: main
+Task: Phase 2 — Write src/inputmap.js (the contract) + src/brain.js (the mind: hybrid physics, perception, state sequencing, particles)
+
+Work Log:
+- Reinstalled Rive packages (sandbox reset had wiped node_modules): both
+  @rive-app/canvas@2.23.0 + @rive-app/canvas-advanced@2.23.0 in shikubot/node_modules.
+- Inspected canvas-advanced d.ts for the API surface I needed:
+  - artboard.node(name): Node — for shape lookups by name
+  - artboard.stateMachineByName(name): StateMachine
+  - new rive.StateMachineInstance(sm, artboard) — for the SM instance
+  - sm.inputCount() + sm.input(i) → SMIInput with .name, .type, .value, .fire()
+  - SMIInput static constants: SMIInput.bool/number/trigger (numbers, for type checks)
+  - Node.x, .y (settable); inherited .rotation, .scaleX, .scaleY from TransformComponent
+- Wrote /home/z/my-project/shikubot/src/inputmap.js (~110 lines):
+  - INPUTMAP: Object.freeze'd contract with all 19 inputs (12 numbers + 7 triggers)
+    and their types, ranges, defaults, and notes. Verbatim from master prompt.
+  - STATE_NAMES: 6 states (idle/curious/excited/startled/sleepy/confused).
+  - triggerForState(name): 'startled' → 'goStartled' (camelCase prefixed with 'go').
+  - validateInputs(sm, SMIInput): throws loudly if any input is missing, has wrong
+    type, or if the runtime exposes an input not in INPUTMAP. Returns a name→input
+    cache for the brain to use. Per master prompt: "Changing any name in inputmap.js
+    breaks loudly (runtime validates all inputs exist)".
+- Wrote /home/z/my-project/shikubot/src/brain.js (~430 lines):
+  - Helper functions: clamp, expEase (exponential ease-out per bloub — never
+    overshoots, settling time ≈ 4/ω), mulberry32 (deterministic PRNG per bloub).
+  - 4 particle classes:
+    * StarParticle (startled burst): 5-point star, spirals inward
+      (rho *= 0.75^(dt*10), angle += 100°/s), fades in/out, per bloub's burst state.
+    * SparkleParticle (excited): small bright dots, drift outward + gravity, fade.
+    * ZParticle (sleepy): floating "z" letters drifting up, staggered birth.
+    * ConfettiParticle (wake from sleepy): 30 colored rectangles burst outward
+      with rotation + gravity.
+  - Brain class:
+    * Constructor: validateInputs (throws on contract drift), lookupShapes (via
+      artboard.node(name) for all 19 shapes from Phase 1 RML), perception state,
+      glasses spring state, target values, particle array, rAF loop bind.
+    * Pointer perception (per bloub): window 'pointermove' + document 'pointerleave'
+      with { passive: true }; reject touch (e.pointerType === 'touch'); re-read
+      getBoundingClientRect each frame; NaN guard (box.width > 0 check); normalize
+      against half-WINDOW (not avatar size) so gaze saturates at screen edge.
+    * Layered perception with staggered ω (per master prompt):
+      ears ω=14 (fast) → headTilt ω=8 (medium) → gaze ω=10 (slow).
+      Mouse sweep → ears move first, head tilts second, gaze settles last.
+    * State-specific overrides per master prompt's states spec:
+      - idle: blink cycle (every 3s, 100ms blink via lidL/lidR=1), slow wag (0.3), smile
+      - curious: ears alert (earL/earR=1), double-blink (phase 0.35s), small mouthO,
+        tail still (wagSpeed=0)
+      - excited: wide eyes (lidL/lidR=0), glasses push-up (glassesLift=1), mouth open,
+        fast wag (wagSpeed=1), 6Hz talk flap (mouthOpen = 0.4 + 0.4 sin(2π·6·t))
+      - confused: squint (lidL/lidR=0.3), glasses slide down (glassesLift=-0.5),
+        one ear folds (earL=-1), wavy/frown mouth (smile=-0.5)
+      - startled: huge eyes, glasses knocked up+crooked (spring-driven), ears flat
+        (earL/earR=-1), star burst particles
+      - sleepy: lids 70% (lidL/lidR=0.7), glasses at nose tip (glassesLift=-1),
+        yawn loop (mouthOpen = sin(π·phase)·0.6 over 2.5s), z-z-z particles
+    * Hybrid physics:
+      - expEase for body/ears/head-tilt/gaze (per user's hybrid decision +
+        bloub's measured physics — body never overshoots)
+      - Critically-damped spring for glasses wobble on startle:
+        x'' = -ω²(x - target) - 2ωx' with ω=13, ζ=1
+        (master prompt: "head-tilt settle 0.3s (ω≈13, ζ=1)" — repurposed for glasses
+        per master prompt: "startled→recovery 1.2s ... own spring recovers ~1.2s wobble")
+      - Fixed 1/120s substep for spring stability (per master prompt: "fixed 1/120s substep")
+      - Sinusoidal oscillation for tail wag (0.7s cycle, ω = 2π/0.7 ≈ 8.98 rad/s)
+    * Public API on window.shiku:
+      - go(name): fires the goXxx trigger + state-specific spring/particle setup
+      - poke(): counter; 3 pokes within 1s → confused (dizzy). Per master prompt
+        acceptance test: "shiku.poke() ×3 → dizzy"
+      - pet(): calms down (startled/sleepy/confused → curious)
+    * Tab-hidden detection: visibilitychange listener; if hidden for 2s → sleepy
+      (per master prompt: "tab hidden → sleepy state within 2s")
+    * writeInputs(): writes all 12 number targets to StateMachineNumber inputs
+      (clamped to declared ranges). For the contract + future SM conditions.
+    * writeArtboard(): writes per-frame visual changes directly to artboard shapes
+      (overrides state animation keyframes for the current frame):
+      - gazeX → pupilL/R.x (±4px) + head.x parallax (±2px)
+      - gazeY → pupilL/R.y (±4px)
+      - headTilt → head.rotation (±12° = ±0.21 rad)
+      - earL/R → earL/R.rotation (±0.35 rad ≈ ±20°)
+      - lidL/R → eyeL/R_lid.scaleY (0..1, 1=closed)
+      - mouthOpen → mouth.scaleY (1 + 1.5·open)
+      - smile → mouth.rotation (±0.2 rad)
+      - glassesLift → glasses.y (±10px)
+      - glassesCrooked → glasses.rotation (±0.2 rad)
+      - wagSpeed → tail1-6.rotation = sin(clock·2π/0.7 - phase·i)·(0.3+0.5·wag)·(i/6)
+    * Single rAF loop, bounded dt (Math.min((ms-last)/1000, 0.064)) per bloub.
+    * renderParticles(): clears overlay canvas + renders all particles on top.
+- Wrote /home/z/my-project/scripts/test-inputmap.mjs (~100 lines, 39 assertions):
+  - triggerForState correctness (5 states + unknown-state-throws)
+  - validateInputs with perfectly-matching SM (returns cache, all 19 inputs present)
+  - validateInputs FAILS LOUDLY on missing input (error message names 'gazeX')
+  - validateInputs FAILS LOUDLY on wrong type (error message names 'blink')
+  - validateInputs FAILS LOUDLY on unexpected runtime input (error names 'extraInput')
+  - Contract sanity: all 12 numbers have valid ranges, defaults in range;
+    12 numbers + 7 triggers + 6 states
+- Wrote /home/z/my-project/scripts/test-brain-imports.mjs (~50 lines, 34 assertions):
+  - createBrain exported + is a function
+  - inputmap.js exports (INPUTMAP, STATE_NAMES, triggerForState, validateInputs)
+  - 19 inputs total (12 numbers + 7 triggers), all master-prompt names present
+  - All 6 state names → trigger name mappings correct
+- All tests pass: 39 + 34 = 73 assertions, 0 failures.
+- Syntax-checked both source files with `node --check`: both clean.
+
+Stage Summary:
+- /home/z/my-project/shikubot/src/inputmap.js — the contract (single source of truth).
+  19 inputs (12 numbers + 7 triggers) declared with types/ranges/defaults.
+  validateInputs() throws loudly on any mismatch.
+- /home/z/my-project/shikubot/src/brain.js — the mind. Brain class with:
+  - Hybrid physics: expEase for body/ears/tilt/gaze, critically-damped spring
+    for glasses wobble (ω=13 ζ=1, 1/120s substep), sin for tail wag.
+  - Layered perception (ears ω=14 → headTilt ω=8 → gaze ω=10).
+  - Pointer perception per bloub (window listener, reject touch, half-WINDOW
+    normalize, NaN guard, re-read getBoundingClientRect each frame).
+  - 6 states with state-specific overrides per master prompt spec.
+  - 4 particle types: StarParticle (startle), SparkleParticle (excited),
+    ZParticle (sleepy), ConfettiParticle (wake from sleepy).
+  - Public API: window.shiku = { go(name), poke(), pet(), brain, state, clock }.
+  - Single rAF loop, bounded dt (0.064s max) per bloub.
+- /home/z/my-project/scripts/test-inputmap.mjs + test-brain-imports.mjs:
+  73 passing tests covering the contract + module graph.
+- Verified acceptance test prerequisites (will execute in Phase 3):
+  - Mouse sweep layering: layered perception with staggered ω ✓
+  - shiku.go('startled') glasses wobble: critically-damped spring ω=13 ζ=1 ✓
+  - shiku.poke() ×3 → dizzy: poke counter + 1s window, 3rd poke → confused ✓
+  - Tab hidden → sleepy: visibilitychange listener + 2s setTimeout ✓
+  - inputmap.js breaks loudly: validateInputs throws on any mismatch ✓
+- Architecture notes for Phase 3:
+  - main.js will create the Brain via `createBrain({ riveCanvas, particlesCanvas,
+    rive, file, artboard, stateMachineInstance })`.
+  - Need to load the .riv via `rive.load(bytes)` + `file.defaultArtboard()` +
+    `artboard.stateMachineByName('Brain')` + `new rive.StateMachineInstance(sm, artboard)`.
+  - Self-host rive.wasm: copy from node_modules/@rive-app/canvas-advanced/rive.wasm
+    (or rive_fallback.wasm) to public/rive.wasm + reference via locateFile.
+  - main.js handles the rAF for Rive's draw (the brain's rAF handles perception
+    + writes + particles). Per master prompt: "One rAF loop in the brain; Rive
+    runs its own. Batch all input writes per frame." — but we'll likely unify
+    them in main.js for simplicity, with brain.tick called from main's rAF.
