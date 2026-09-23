@@ -9,12 +9,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "vite build && npx serve dist",
-    "rive:build": "rive . --once",
-    "rive:verify": "rive . --verify",
-    "rive:inspect": "rive inspect . --summary",
-    "rive:shot": "rive . --screenshot --advance=1"
+    "rive:build": "/home/z/my-project/bin/rive . --once",
+    "rive:verify": "/home/z/my-project/bin/rive . --verify",
+    "rive:inspect": "/home/z/my-project/bin/rive inspect . --summary"
   },
   "dependencies": {
+    "@rive-app/canvas": "2.23.0",
     "@rive-app/canvas-advanced": "2.23.0"
   },
   "devDependencies": {

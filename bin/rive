@@ -1,4 +1,24 @@
 #!/bin/bash
-export LD_LIBRARY_PATH="/home/z/.local/lib/rive-libs/extracted/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
-export PATH="$HOME/.rive/bin:$PATH"
-exec rive "$@"
+# Rive CLI wrapper — uses project-local libs to survive sandbox resets.
+# Everything lives under /home/z/my-project/.local/ so it persists.
+
+PROJECT_LOCAL="/home/z/my-project/.local"
+
+# libEGL.so.1 + libGLESv2.so.2 from libegl1/libgles2 (libglvnd dispatcher)
+# libEGL_mesa.so.0 from libegl-mesa0 (actual Mesa EGL vendor impl)
+# Both live in $PROJECT_LOCAL/lib/
+export LD_LIBRARY_PATH="$PROJECT_LOCAL/lib:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+
+# Tell libglvnd to load Mesa's EGL vendor implementation
+export __EGL_VENDOR_LIBRARY_FILENAMES="$PROJECT_LOCAL/share/glvnd/egl_vendor.d/50_mesa.json"
+
+# Force Mesa software rendering (no GPU), surfaceless EGL platform (no X11/Wayland)
+export LIBGL_ALWAYS_SOFTWARE=1
+export MESA_LOADER_DRIVER_OVERRIDE=swrast
+export DRI_DRIVER=swrast
+export EGL_PLATFORM=surfaceless
+
+# Tell Mesa where to find the DRI drivers (swrast_dri.so etc.)
+export LIBGL_DRIVERS_PATH="/usr/lib/x86_64-linux-gnu/dri"
+
+exec "$PROJECT_LOCAL/bin/rive" "$@"

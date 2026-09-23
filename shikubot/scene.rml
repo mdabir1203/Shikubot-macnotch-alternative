@@ -1,22 +1,346 @@
 <Rive version="1" kind="fragment">
-    <Artboard defaultStateMachineId="0:7" styleId="0:5" width="500" height="500" name="Artboard" id="0:2">
-        <LayoutComponentStyle name="Artboard Style" id="0:5"/>
-
+    <!--
+        Shiku Bot — Phase 1 RML authoring.
+        Artwork proportions per master prompt defaults (assets/frames/ empty
+        after YouTube bot-detection blocked extraction; see assets/frames/README.md).
+        Palette: fur #8E9A3B / light #A9B44E / shadow #6E7828; hair+tail-tip+inner-ear
+        #D95B2B→#F08A3F; glasses #202020; sclera #FFFFFF; pupil #141414;
+        mouth #A9322C; tongue #D9534A.
+        Draw order is front-to-back (Rive: first declared paints on top).
+        State machine consumes only the 6 go* triggers + auto-exit on startled;
+        the 12 number inputs + blink are declared for the contract — the JS
+        brain writes them per-frame and drives visual changes directly via the
+        runtime API in Phase 3. State animations are no-op timelines for v1;
+        keyframes land in iteration 2.
+    -->
+    <Artboard defaultStateMachineId="0:7" styleId="0:300" width="512" height="512" name="Artboard" id="0:2">
+        <!-- Per gotchas: artboard needs a LayoutComponentStyle linked via styleId
+             or its contents don't draw at runtime. -->
+        <LayoutComponentStyle name="Artboard Style" id="0:300"/>
+        <!-- Background fill (artboard's own fill, paints first) -->
         <Fill name="Background">
-            <SolidColor colorValue="FF282828" name="Color"/>
+            <SolidColor colorValue="FF1D1D1D" name="BgColor"/>
         </Fill>
 
-        <LinearAnimation duration="60" name="Animation 1" id="0:6"/>
+        <!-- ============================================================
+             BODY PARTS — declared front-to-back (mouth first = on top,
+             tail last = behind). Geometry children of one Shape share the
+             Shape's x/y; the child's own x/y offsets it within the shape.
+             ============================================================ -->
 
-        <StateMachine name="State Machine 1" id="0:7">
-            <StateMachineLayer name="Layer 1" id="0:8">
-                <AnyState x="200" y="-120"/>
-                <ExitState x="400" y="-120"/>
+        <!-- 1. MOUTH (top, frontmost) — lower third of head -->
+        <Shape x="256" y="270" name="mouth" id="0:10">
+            <Ellipse width="40" height="20" originX="0.5" originY="0.5" name="mouthPath"/>
+            <Fill name="mouthFill">
+                <SolidColor colorValue="FFA9322C" name="mouthColor"/>
+            </Fill>
+        </Shape>
+
+        <!-- 2. GLASSES — two lens rings (stroke only, eyes show through) -->
+        <Shape x="256" y="180" name="glasses" id="0:30">
+            <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="-30" y="0" name="leftLens"/>
+            <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="30" y="0" name="rightLens"/>
+            <Stroke thickness="4" cap="round" join="round" name="glassesStroke">
+                <SolidColor colorValue="FF202020" name="glassesColor"/>
+            </Stroke>
+        </Shape>
+
+        <!-- 3. EYES — right eye then left eye, each: lid → pupil → sclera
+             (lid in front so blink covers pupil/sclera; sclera behind both) -->
+        <!-- Right eye -->
+        <Shape x="286" y="180" name="eyeR_lid" id="0:20">
+            <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidRPath"/>
+            <Fill name="lidRFill">
+                <SolidColor colorValue="FF8E9A3B" name="lidRColor"/>
+            </Fill>
+        </Shape>
+        <Shape x="286" y="180" name="eyeR_pupil" id="0:21">
+            <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilRPath"/>
+            <Fill name="pupilRFill">
+                <SolidColor colorValue="FF141414" name="pupilRColor"/>
+            </Fill>
+        </Shape>
+        <Shape x="286" y="180" name="eyeR_sclera" id="0:22">
+            <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraRPath"/>
+            <Fill name="scleraRFill">
+                <SolidColor colorValue="FFFFFFFF" name="scleraRColor"/>
+            </Fill>
+        </Shape>
+        <!-- Left eye -->
+        <Shape x="226" y="180" name="eyeL_lid" id="0:23">
+            <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidLPath"/>
+            <Fill name="lidLFill">
+                <SolidColor colorValue="FF8E9A3B" name="lidLColor"/>
+            </Fill>
+        </Shape>
+        <Shape x="226" y="180" name="eyeL_pupil" id="0:24">
+            <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilLPath"/>
+            <Fill name="pupilLFill">
+                <SolidColor colorValue="FF141414" name="pupilLColor"/>
+            </Fill>
+        </Shape>
+        <Shape x="226" y="180" name="eyeL_sclera" id="0:25">
+            <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraLPath"/>
+            <Fill name="scleraLFill">
+                <SolidColor colorValue="FFFFFFFF" name="scleraLColor"/>
+            </Fill>
+        </Shape>
+
+        <!-- 4. HAIR TUFT — between ears, orange gradient -->
+        <Shape x="256" y="95" name="hairTuft" id="0:40">
+            <PointsPath isClosed="true" isClockwise="true" name="tuftPath">
+                <StraightVertex x="0" y="-15"/>
+                <StraightVertex x="10" y="5"/>
+                <StraightVertex x="-10" y="5"/>
+            </PointsPath>
+            <Fill name="tuftFill">
+                <LinearGradient startX="0" startY="-15" endX="0" endY="5" name="tuftGradient">
+                    <GradientStop colorValue="FFD95B2B" position="0"/>
+                    <GradientStop colorValue="FFF08A3F" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 5. EARS — alert pose (triangles pointing up), behind hair -->
+        <Shape x="312" y="110" name="earR" id="0:50">
+            <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earRPath"/>
+            <Fill name="earRFill">
+                <SolidColor colorValue="FF8E9A3B" name="earRColor"/>
+            </Fill>
+        </Shape>
+        <Shape x="200" y="110" name="earL" id="0:51">
+            <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earLPath"/>
+            <Fill name="earLFill">
+                <SolidColor colorValue="FF8E9A3B" name="earLColor"/>
+            </Fill>
+        </Shape>
+
+        <!-- 6. HEAD — near-circular, 200×200 (45% of total mascot height) -->
+        <Shape x="256" y="200" name="head" id="0:60">
+            <Ellipse width="200" height="200" originX="0.5" originY="0.5" name="headPath"/>
+            <Fill name="headFill">
+                <SolidColor colorValue="FF8E9A3B" name="headColor"/>
+            </Fill>
+        </Shape>
+
+        <!-- 7. BODY — elongated ellipse, 180×200, slightly lighter than head -->
+        <Shape x="256" y="340" name="body" id="0:70">
+            <Ellipse width="180" height="200" originX="0.5" originY="0.5" name="bodyPath"/>
+            <Fill name="bodyFill">
+                <SolidColor colorValue="FFA9B44E" name="bodyColor"/>
+            </Fill>
+        </Shape>
+
+        <!-- 8. TAIL — 6 tapering segments, behind body.
+             tail1 is largest (closest to body), tail6 is tip (orange gradient).
+             Declared tip-first so the base is drawn last (behind other segments). -->
+        <Shape x="475" y="340" name="tail6" id="0:80">
+            <Ellipse width="10" height="10" originX="0.5" originY="0.5" name="tail6Path"/>
+            <Fill name="tail6Fill">
+                <LinearGradient startX="-5" startY="0" endX="5" endY="0" name="tail6Grad">
+                    <GradientStop colorValue="FFD95B2B" position="0"/>
+                    <GradientStop colorValue="FFF08A3F" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+        <Shape x="460" y="340" name="tail5" id="0:81">
+            <Ellipse width="14" height="14" originX="0.5" originY="0.5" name="tail5Path"/>
+            <Fill name="tail5Fill">
+                <SolidColor colorValue="FF8E9A3B" name="tail5Color"/>
+            </Fill>
+        </Shape>
+        <Shape x="445" y="340" name="tail4" id="0:82">
+            <Ellipse width="18" height="18" originX="0.5" originY="0.5" name="tail4Path"/>
+            <Fill name="tail4Fill">
+                <SolidColor colorValue="FF8E9A3B" name="tail4Color"/>
+            </Fill>
+        </Shape>
+        <Shape x="425" y="340" name="tail3" id="0:83">
+            <Ellipse width="22" height="22" originX="0.5" originY="0.5" name="tail3Path"/>
+            <Fill name="tail3Fill">
+                <SolidColor colorValue="FF8E9A3B" name="tail3Color"/>
+            </Fill>
+        </Shape>
+        <Shape x="400" y="340" name="tail2" id="0:84">
+            <Ellipse width="26" height="26" originX="0.5" originY="0.5" name="tail2Path"/>
+            <Fill name="tail2Fill">
+                <SolidColor colorValue="FF8E9A3B" name="tail2Color"/>
+            </Fill>
+        </Shape>
+        <Shape x="370" y="340" name="tail1" id="0:85">
+            <Ellipse width="30" height="30" originX="0.5" originY="0.5" name="tail1Path"/>
+            <Fill name="tail1Fill">
+                <SolidColor colorValue="FF8E9A3B" name="tail1Color"/>
+            </Fill>
+        </Shape>
+
+        <!-- ============================================================
+             STATE MACHINE "Brain" — the single SM, auto-plays on load
+             (defaultStateMachineId above). 19 declared inputs (12 numbers
+             + 7 triggers). 1 layer with 6 AnimationStates + 30 trigger
+             transitions. any→startled is highest priority (first transition
+             in each state). Sleepy only reachable via goSleepy trigger.
+             Startled auto-exits to curious after 1.2s (72 frames at 60fps).
+             ============================================================ -->
+        <StateMachine name="Brain" id="0:7">
+            <!-- NUMBER inputs (the contract — JS brain writes per-frame) -->
+            <StateMachineNumber name="gazeX" id="0:100"/>
+            <StateMachineNumber name="gazeY" id="0:101"/>
+            <StateMachineNumber name="headTilt" id="0:102"/>
+            <StateMachineNumber name="earL" id="0:103"/>
+            <StateMachineNumber name="earR" id="0:104"/>
+            <StateMachineNumber name="lidL" id="0:105"/>
+            <StateMachineNumber name="lidR" id="0:106"/>
+            <StateMachineNumber name="mouthOpen" id="0:107"/>
+            <StateMachineNumber name="smile" id="0:108"/>
+            <StateMachineNumber name="wagSpeed" id="0:109"/>
+            <StateMachineNumber name="glassesLift" id="0:110"/>
+            <StateMachineNumber name="glassesCrooked" id="0:111"/>
+            <!-- TRIGGER inputs (blink on a brain schedule; go* fired by shiku.go()) -->
+            <StateMachineTrigger name="blink" id="0:112"/>
+            <StateMachineTrigger name="goIdle" id="0:113"/>
+            <StateMachineTrigger name="goCurious" id="0:114"/>
+            <StateMachineTrigger name="goExcited" id="0:115"/>
+            <StateMachineTrigger name="goStartled" id="0:116"/>
+            <StateMachineTrigger name="goSleepy" id="0:117"/>
+            <StateMachineTrigger name="goConfused" id="0:118"/>
+
+            <StateMachineLayer name="StateSequencing" id="0:120">
+                <AnyState x="0" y="-120"/>
+                <ExitState x="800" y="-120"/>
                 <EntryState>
-                    <StateTransition stateToId="0:12"/>
+                    <StateTransition stateToId="0:130"/>
                 </EntryState>
-                <AnimationState x="200" animationId="0:6" id="0:12"/>
+
+                <!-- idle (entry point) — goStartled first = highest priority -->
+                <AnimationState animationId="0:200" id="0:130" x="160" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- curious -->
+                <AnimationState animationId="0:201" id="0:131" x="320" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- excited -->
+                <AnimationState animationId="0:202" id="0:132" x="480" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- startled — auto-exits to curious when anim completes
+                     (72 frames = 1.2s at 60fps). Per master prompt:
+                     "startled→recovery 1.2s ... → exits to curious".
+                     exitTimeIsPercetange is the format's misspelling (sic). -->
+                <AnimationState animationId="0:203" id="0:133" x="320" y="160">
+                    <StateTransition stateToId="0:131"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- sleepy — only reachable via goSleepy (no other state lists
+                     a transition to 0:134 except via goSleepy trigger) -->
+                <AnimationState animationId="0:204" id="0:134" x="160" y="160">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- confused -->
+                <AnimationState animationId="0:205" id="0:135" x="480" y="160">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                </AnimationState>
             </StateMachineLayer>
         </StateMachine>
+
+        <!-- ============================================================
+             STATE ANIMATIONS — no-op timelines for Phase 1 v1.
+             Durations match the master prompt's timing spec:
+               - idle: 180 frames (3s loop, room for blink cycle + slow wag)
+               - curious: 180 frames (3s loop)
+               - excited: 120 frames (2s loop, fast wag)
+               - startled: 72 frames (1.2s oneShot — matches "startled→recovery 1.2s")
+               - sleepy: 600 frames (10s loop, slow yawn + z-z-z)
+               - confused: 180 frames (3s loop)
+             Keyframes land in iteration 2 (pupil dilation, tail puff, etc.).
+             ============================================================ -->
+        <LinearAnimation loopValue="loop" duration="180" name="anim_idle" id="0:200"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_curious" id="0:201"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_excited" id="0:202"/>
+        <LinearAnimation loopValue="oneShot" duration="72" name="anim_startled" id="0:203"/>
+        <LinearAnimation loopValue="loop" duration="600" name="anim_sleepy" id="0:204"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_confused" id="0:205"/>
     </Artboard>
 </Rive>

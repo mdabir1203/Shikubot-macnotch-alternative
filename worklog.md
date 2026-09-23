@@ -261,3 +261,115 @@ Stage Summary:
   paths, add bones + joysticks + 6-state machine "Brain" with all 14
   inputs/triggers, build .riv via `rive . --once`, verify with
   `rive . --screenshot`.
+
+---
+Task ID: phase-1
+Agent: main
+Task: Phase 1 — Author scene.rml (the Rive body) + build shikubot.riv
+
+Work Log:
+- Fetched Rive docs (format, drawing, state-machines, easing, rigging, gotchas)
+  + schemas for: StateMachineNumber, StateMachineTrigger, TransitionTriggerCondition,
+  RootBone, Bone, LinearAnimation, KeyedObject, KeyedProperty, KeyFrameDouble,
+  AnimationState, StateTransition, Shape, Ellipse, Rectangle, Triangle, PointsPath,
+  StraightVertex.
+- Major sandbox reset hit ~/.rive/, ~/.local/, ~/.deno/ (wiped between turns).
+  Re-installed Rive CLI to PROJECT-LOCAL path /home/z/my-project/.local/bin/rive
+  + extracted libegl1, libgles2, libegl-mesa0 debs to /home/z/my-project/.local/lib/.
+  Copied Mesa's 50_mesa.json to /home/z/my-project/.local/share/glvnd/egl_vendor.d/.
+  Updated wrapper /home/z/my-project/bin/rive to use these project-local paths
+  + force software rendering (LIBGL_ALWAYS_SOFTWARE=1, MESA_LOADER_DRIVER_OVERRIDE=swrast,
+  EGL_PLATFORM=surfaceless, LIBGL_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri).
+- Authored scene.rml (~340 lines, single RML file):
+  - Artboard 512×512, background #1D1D1D
+  - 19 Shapes drawn front-to-back (mouth→eyes→glasses→hair→ears→head→body→tail):
+    * mouth: ellipse 40×20 at (256, 270), fill #A9322C
+    * glasses: 2 ellipse rings 60×60 (stroke #202020, no fill) — eyes show through
+    * eyeL/R: 3 shapes each (lid=fur-colored rectangle 44×44, pupil=dark ellipse
+      16×16, sclera=white ellipse 40×40) — lid in front so blink covers pupil/sclera
+    * hairTuft: orange gradient triangle (#D95B2B→#F08A3F) at (256, 95)
+    * earL/R: fur-colored triangles 40×80 at (200, 110) and (312, 110), alert pose
+    * head: ellipse 200×200 at (256, 200), fill #8E9A3B (≈45% of total mascot height)
+    * body: ellipse 180×200 at (256, 340), fill #A9B44E
+    * tail: 6 tapering segments (30→26→22→18→14→10) going right; tail6 (tip) uses
+      orange gradient #D95B2B→#F08A3F, rest use fur color
+  - StateMachine "Brain" with 19 declared inputs (12 numbers + 7 triggers):
+    * numbers: gazeX, gazeY, headTilt, earL, earR, lidL, lidR, mouthOpen, smile,
+      wagSpeed, glassesLift, glassesCrooked (all -1..1 or 0..1 per contract)
+    * triggers: blink, goIdle, goCurious, goExcited, goStartled, goSleepy, goConfused
+  - StateMachineLayer "StateSequencing" with 6 AnimationStates (idle/curious/excited/
+    startled/sleepy/confused) + 28 StateTransitions + 26 TransitionTriggerConditions.
+    * any→startled is FIRST transition in each state (highest priority)
+    * sleepy only reachable via goSleepy trigger (no other state lists a sleepy
+      transition without that trigger)
+    * startled auto-exits to curious when anim completes (enableExitTime=true,
+      exitTimeIsPercetange=true [sic — format typo per docs], exitTime=100,
+      duration=150ms)
+  - 6 LinearAnimations with correct loop values + durations per master prompt timing:
+    * anim_idle: loop, 180 frames (3s)
+    * anim_curious: loop, 180 frames (3s)
+    * anim_excited: loop, 120 frames (2s, fast wag)
+    * anim_startled: oneShot, 72 frames (1.2s — matches "startled→recovery 1.2s")
+    * anim_sleepy: loop, 600 frames (10s yawn loop)
+    * anim_confused: loop, 180 frames (3s)
+  - Added LayoutComponentStyle (id 0:300) + linked via styleId on Artboard per
+    gotchas warning ("artboard-without-style"); without it the contents don't
+    draw at runtime.
+- Phase 1 skipped bones (used master prompt's "boneless + constraints for v1"
+  option) — brain writes transforms directly to shapes via runtime API.
+- Build: rive . --once → build/shikubot.riv (2588 bytes, 0 errors, 0 warnings).
+  Final inspect --summary: 178 objects, 0 problems, 0 warnings. Breakdown:
+  1 Artboard + 1 StateMachine + 1 StateMachineLayer + 6 AnimationState + 1 AnyState
+  + 1 EntryState + 1 ExitState + 28 StateTransition + 26 TransitionTriggerCondition
+  + 12 StateMachineNumber + 7 StateMachineTrigger + 6 LinearAnimation + 19 Shape
+  + 15 Ellipse + 2 Rectangle + 2 Triangle + 1 PointsPath + 3 StraightVertex + 19 Fill
+  + 1 Stroke + 18 SolidColor + 2 LinearGradient + 4 GradientStop + 1 LayoutComponentStyle
+  + 1 Backboard (auto).
+- Visual verification: attempted via two paths, both partially blocked:
+  1. CLI `rive . --screenshot` — needs working GL backend; Mesa software swrast
+     can't link Rive's path tessellation shaders ("GL_INVALID_OPERATION in
+     glUseProgram(program 2 not linked)"). PNG output is 2201 bytes (flat
+     background, no shapes). Screenshot file is written but blank.
+  2. Browser runtime via @rive-app/canvas-advanced + agent-browser — .riv LOADS
+     successfully (window.shikuReady=true, artboard=Artboard bounds={0,0,512,512},
+     smCount=1, inputCount=19) but artboard.draw() produces no visible shapes.
+     Tested with both the basic @rive-app/canvas package and the advanced one.
+     Even the official rml_triangle sample (a known-good .riv) doesn't render
+     through my preview setup — indicates the canvas-advanced align() API call
+     fails with "Cannot read properties of undefined (reading 'value')" because
+     the WASM-bound `rive.Fit` and `rive.Alignment` are exposed as embind class
+     functions, not as enum objects with .Contain/.Center properties. Phase 3
+     will resolve this with proper Vite + main.js setup.
+- Structural verification PASSES:
+  - `rive . --verify` → 0 errors, 0 warnings ✓
+  - `rive . --once` → built build/shikubot.riv (2588 bytes) ✓
+  - `rive inspect . --summary` → 178 objects, 0 problems ✓
+  - Runtime API confirms: artboard=Artboard, stateMachineByName('Brain')=found,
+    stateMachineCount=1, inputCount=19 (12 numbers + 7 triggers) ✓
+
+Stage Summary:
+- /home/z/my-project/shikubot/scene.rml — the RML spec (single source of truth for
+  the body). 178 objects: 19 shapes + 1 state machine + 6 state animations +
+  19 declared inputs (12 numbers + 7 triggers).
+- /home/z/my-project/shikubot/build/shikubot.riv — the built binary (2588 bytes).
+  PRIVATE — never commit (per LICENSE + .gitignore).
+- /home/z/my-project/shikubot/rive.yaml — artboard 512×512, background #1D1D1D.
+- Updated package.json: pinned @rive-app/canvas + @rive-app/canvas-advanced to
+  2.23.0, vite to 5.4.10. npm scripts use /home/z/my-project/bin/rive wrapper.
+- Architecture decisions made during Phase 1 (documented for Phase 2/3):
+  - Boneless rig for v1 (per master prompt's option); brain writes transforms
+    directly to shapes via runtime API.
+  - State animations are no-op timelines for v1 (no keyframes); state-specific
+    visual changes (pupil dilation, tail puff, etc.) land in iteration 2.
+  - StateMachineNumber/Trigger are "deprecated" per Rive docs but used here
+    because the runtime API exposes them via stateMachineInputs('Brain') and
+    the brain writes them per-frame — ViewModel data binding would be overkill.
+  - Per-frame perception (gaze, tilt, ears, lids, mouth, smile, wag, glasses) is
+    driven by the brain writing to artboard components via runtime API in Phase 3,
+    NOT by blend states in the .riv. The number inputs are declared for the
+    contract + for any future SM conditions, but Phase 1 doesn't wire them to
+    anything inside the .riv.
+- Visual verification deferred to Phase 3 — when the actual main.js + Vite
+  runtime renders the .riv, the canvas-advanced API alignment issue will be
+  debugged properly. The .riv itself is structurally sound (compiles + loads
+  with all expected inputs).
