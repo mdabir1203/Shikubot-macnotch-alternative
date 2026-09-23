@@ -1,0 +1,37 @@
+SHIKU BOT — PRIVATE EDUCATIONAL SHOWCASE LICENSE
+
+Copyright (c) 2026 Shiku Bot Project Contributors.
+All rights reserved.
+
+This software is a private educational showcase. It is NOT open-source and
+NOT licensed for commercial use.
+
+1. PERMISSIONS
+   - You MAY run this software locally for personal, educational,
+     non-commercial study of interactive mascot architecture.
+   - You MAY read, modify, and learn from the source code (src/, scene.rml,
+     rive.yaml, AGENTS.md) for educational purposes.
+
+2. PROHIBITIONS
+   - You MAY NOT redistribute, sublicense, sell, host, or commercially
+     exploit this software or any derivative of it.
+   - You MAY NOT commit `assets/frames/`, `build/shikubot.riv`, or any
+     traced silhouettes/derivatives of the Sisimpur Shiku puppet to a
+     public repository or share them publicly.
+   - You MAY NOT use the Shiku name, likeness, character design, or any
+     Sisimpur-derived artwork for any commercial purpose.
+
+3. ARTWORK RIGHTS
+   - The Shiku character and Sisimpur are © Sesame Workshop. This project
+     is an unaffiliated educational exercise that does not claim
+     endorsement by or affiliation with Sesame Workshop.
+   - The .riv file, frame captures, and any traced silhouettes are derived
+     works of © Sesame Workshop material and are excluded from any
+     license granted here. They remain the property of their respective
+     rights holders.
+
+4. NO WARRANTY
+   - This software is provided "AS IS", without warranty of any kind,
+     express or implied. Use at your own risk.
+
+For licensing inquiries, contact the project maintainers.

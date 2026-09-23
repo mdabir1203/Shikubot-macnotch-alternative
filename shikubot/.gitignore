@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+dist/
+node_modules/
+*.log
+
+# Rive CLI cache
+.rive-cache/
+
+# PRIVATE — never commit
+# Per master prompt: artwork © Sesame Workshop; .riv, frames, and traced
+# assets stay in the private showcase, no public repo, no commercial use.
+assets/frames/*.png
+assets/frames/*.jpg
+assets/frames/*.jpeg
+assets/frames/*.webp
+build/*.riv
+build/*.rev
+*.riv
+*.rev
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,4 @@
+#!/bin/bash
+export LD_LIBRARY_PATH="/home/z/.local/lib/rive-libs/extracted/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+export PATH="$HOME/.rive/bin:$PATH"
+exec rive "$@"

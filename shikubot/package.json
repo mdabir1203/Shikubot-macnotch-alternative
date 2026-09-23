@@ -1,0 +1,23 @@
+{
+  "name": "shikubot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shiku — interactive mascot (Rive body via CLI + JS brain). Private educational showcase.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite build && npx serve dist",
+    "rive:build": "rive . --once",
+    "rive:verify": "rive . --verify",
+    "rive:inspect": "rive inspect . --summary",
+    "rive:shot": "rive . --screenshot --advance=1"
+  },
+  "dependencies": {
+    "@rive-app/canvas-advanced": "2.23.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.10"
+  }
+}

@@ -173,3 +173,91 @@ Stage Summary:
   //     </LinearAnimation>
   //   </Artboard>
   // </Rive>
+
+---
+Task ID: phase-0
+Agent: main
+Task: Phase 0 — Setup + Frame Extraction (Rive CLI install, project scaffold, Sisimpur frame extraction attempt)
+
+Work Log:
+- Environment probe: Node v24.21.0, npm 11.19.0, ffmpeg 7.1.5 (Debian 13
+  Trixie), Python 3.13, curl. yt-dlp NOT installed → installed v2026.08.19
+  via `pip install --break-system-packages yt-dlp`.
+- Installed Rive CLI 1.1.1 via `curl -fsSL https://releases.rive.app/cli/install.sh | bash`
+  → binary at /home/z/.rive/bin/rive. Initial run failed: `libEGL.so.1`
+  and `libGLESv2.so.2` not installed and no sudo to apt-get.
+- Workaround: `apt-get download libegl1 libgles2` (no root needed),
+  `dpkg-deb -x *.deb extracted/` in user space, then run rive with
+  `LD_LIBRARY_PATH=/home/z/.local/lib/rive-libs/extracted/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH`.
+- Created wrapper at /home/z/my-project/bin/rive that sets LD_LIBRARY_PATH
+  + PATH and execs rive. All future rive invocations use this wrapper.
+- Verified: `rive --version` → "rive 1.1.1"; `rive doctor` → all checks
+  pass except "Not logged in (prod)" (expected — we use --once for local
+  unsigned builds, no login required).
+- Scaffolded Rive project: `rive create shikubot` at
+  /home/z/my-project/shikubot/ — wrote rive.yaml, scene.rml (default
+  empty artboard + timeline + state machine), AGENTS.md, CLAUDE.md,
+  .gitignore.
+- Updated rive.yaml: artboard 512×512 (per master prompt), background
+  "#1D1D1D", build output dir "build", logs to build/rive.log +
+  build/problems.log.
+- Scaffolded Vite vanilla project alongside Rive project:
+  - package.json: @rive-app/canvas-advanced pinned to 2.23.0, vite 5.4.10
+  - vite.config.js: assetsInclude for .riv + .wasm, COOP/COEP headers for
+    wasm instantiation, base "./" for relative paths
+  - index.html: 512×512 Rive canvas + 512×512 particles canvas (overlay)
+    + minimal dark styling
+  - src/main.js, src/brain.js, src/inputmap.js — stubs to be filled in
+    Phases 2 and 3
+  - .gitignore: extended Rive's default to exclude assets/frames/*.{png,jpg,jpeg,webp},
+    build/*.riv, *.riv, *.rev, node_modules/, dist/, .rive-cache/
+  - LICENSE: private educational showcase license — explicit prohibition
+    on committing .riv/frames, no commercial use, © Sesame Workshop
+    acknowledged
+- Frame extraction ATTEMPTED (3 tries, all blocked):
+  1. yt-dlp without JS runtime → failed (YouTube deprecated JS-less)
+  2. Installed Deno 2.x at ~/.deno/bin/deno → retried with --js-runtimes deno
+     → HTTP 429 (YouTube bot detection)
+  3. Retried with --extractor-args "youtube:player_client=android" → same
+     "Sign in to confirm you're not a bot" error
+  4. Web search for DailyMotion/Vimeo/archive.org Sisimpur clips → no
+     direct video URLs returned
+- FELL BACK to master prompt's default proportions per its self-healing
+  rule (assets/frames/ empty → defaults). Documented all 3 attempts +
+  fallback rationale + how to repopulate later in
+  /home/z/my-project/shikubot/assets/frames/README.md.
+- Verified the project still compiles: `rive . --verify` → "verified (0
+  bytes, 2ms, 0 errors, 0 warnings)"; `rive inspect . --summary` → 1
+  artboard, 12 objects, no problems.
+
+Stage Summary:
+- Rive CLI 1.1.1 installed and working via wrapper script
+  /home/z/my-project/bin/rive (sets LD_LIBRARY_PATH for extracted libEGL +
+  libGLESv2 in user space — no root needed).
+- Project scaffolded at /home/z/my-project/shikubot/:
+  - Rive side: rive.yaml (512×512 artboard), scene.rml (empty default —
+    to be authored in Phase 1), AGENTS.md, CLAUDE.md, build/ output dir
+  - Vite side: package.json (@rive-app/canvas-advanced 2.23.0, vite 5.4.10),
+    vite.config.js (COOP/COEP headers for wasm, .riv/.wasm as assets),
+    index.html (rive-canvas + particles-canvas overlay), src/{main,brain,
+    inputmap}.js stubs
+  - IP posture: LICENSE (private, no commercial use, © Sesame Workshop
+    acknowledged), .gitignore excludes frames + .riv + .rev
+- Frame extraction: BLOCKED by YouTube bot detection (cloud IP without
+  cookies). assets/frames/ is empty; fallback to master prompt defaults
+  is in effect. README in assets/frames/ documents the attempts and the
+  residential-IP command to repopulate later.
+- Verification: `rive . --verify` clean; `rive inspect . --summary` shows
+  1 artboard / 12 objects / 0 problems.
+- Architecture decisions confirmed (from AskUserQuestion round 1):
+  - Rive CLI pivot: REWIRE FULL — author scene.rml directly, no human editor
+  - Spring physics: HYBRID — ease-outs for body/ears/tilt/gaze, springs for
+    glasses wobble + sparkle particles + tail wag oscillation
+  - State coverage: ALL 6 — idle/curious/excited/startled/sleepy/confused
+    in one RML pass
+  - Asset strategy: EXTRACT FIRST attempted, fell back to defaults
+- Next phase (Phase 1): author scene.rml with Shiku's body parts (head,
+  ears, hair tuft, glasses, eyes, mouth ×6, tail ×6 segments) as RML
+  paths, add bones + joysticks + 6-state machine "Brain" with all 14
+  inputs/triggers, build .riv via `rive . --once`, verify with
+  `rive . --screenshot`.
