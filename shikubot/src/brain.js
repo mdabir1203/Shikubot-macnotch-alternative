@@ -657,6 +657,46 @@ class Brain {
     this.lastFrame = 0;
     this.tabHiddenSince = 0;
 
+    // 4e. Autonomous mood cycling (Phase 6: Shiku lives on its own).
+    // After 5 seconds of no user interaction, Shiku starts cycling through
+    // moods automatically via a Markov chain. Each state has a natural
+    // duration range; the next state is picked probabilistically.
+    this.lastInteractionAt = 0;
+    this.autonomousDelay = 5.0;
+    this.stateDuration = 0;
+    this.nextTransitionAt = Infinity;
+
+    // 4f. Click/tap interaction state (Phase 6: mobile clicks).
+    this._clickTimer = null;
+    this._clickCount = 0;
+    this._pressStart = 0;
+    this._pressTimer = null;
+
+    // 4g. Markov transition table — probabilities for each state's likely
+    // next state. Organic feel — not a fixed sequence, but weighted random.
+    this.markov = {
+      idle:     [['curious', 30], ['excited', 20], ['sleepy', 15], ['orbit', 10], ['confused', 10], ['disco', 8], ['comet', 7]],
+      curious:  [['idle', 30], ['excited', 25], ['orbit', 15], ['confused', 10], ['hypno', 10], ['burst', 10]],
+      excited:  [['idle', 35], ['curious', 20], ['burst', 15], ['disco', 15], ['comet', 10], ['startled', 5]],
+      startled: [['curious', 60], ['idle', 30], ['confused', 10]],
+      sleepy:   [['confused', 30], ['idle', 30], ['curious', 20], ['hypno', 20]],
+      confused: [['idle', 40], ['curious', 30], ['sleepy', 15], ['hypno', 15]],
+      orbit:    [['idle', 30], ['comet', 25], ['burst', 15], ['excited', 15], ['curious', 15]],
+      comet:    [['idle', 30], ['orbit', 25], ['burst', 15], ['confused', 15], ['curious', 15]],
+      burst:    [['curious', 40], ['idle', 30], ['excited', 20], ['orbit', 10]],
+      disco:    [['idle', 25], ['excited', 20], ['orbit', 20], ['comet', 15], ['hypno', 10], ['burst', 10]],
+      rocket:   [['idle', 50], ['excited', 20], ['curious', 15], ['confused', 15]],
+      hypno:    [['sleepy', 30], ['confused', 25], ['idle', 20], ['orbit', 15], ['curious', 10]],
+    };
+
+    // 4h. Natural duration range for each state (seconds).
+    this.stateDurations = {
+      idle: [5, 12], curious: [3, 8], excited: [2, 5],
+      startled: [1.5, 1.5], sleepy: [8, 15], confused: [3, 6],
+      orbit: [3, 5], comet: [2, 3], burst: [2.5, 2.5],
+      disco: [4, 8], rocket: [3, 3], hypno: [5, 10],
+    };
+
     // Bind handlers (so removeEventListener works).
     this.tick = this.tick.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
@@ -823,60 +863,134 @@ class Brain {
     ctx.fill();
   }
 
-  // ── Phase 5: render3DShading (on particles canvas, in front of rive) ─
-  // Draws radial gradient highlights on body + head to give 3D sphere look.
-  // Highlight: top-left, light + low alpha. Shadow: bottom-right, dark + low alpha.
+  // ── Phase 6: renderStudioShading (multi-layer gradient system) ────
+  // Replaces the simple 3D shading with a full studio-production gradient
+  // system: base color gradient + key light + fill light + rim light +
+  // ambient occlusion + subsurface scattering. Each layer uses the global
+  // light direction (top-left) + a slow hue cycle for surreal quality.
+  // Drawn on the particles canvas (in front of the flat-colored Rive shapes).
   render3DShading() {
     if (!this.particlesCanvas) return;
-    // Note: the context transform (2x scale for 4K) is already set by
-    // renderParticles() which calls this method. All coordinates are 512-based.
     const ctx = this.particlesCanvas.getContext('2d');
     const s = this.shapes;
     if (!s.head || !s.body) return;
 
-    // Highlight position: top-left of each shape.
-    // Head at (256, 200 + rocketOffset), body at (256, 340 + rocketOffset)
     const rocketY = this._rocketOffsetY || 0;
-    const headX = 256, headY = 200 + rocketY;
-    const bodyX = 256, bodyY = 340 + rocketY;
+    const burstScale = (this.state === 'burst' && this._burstScale) ? this._burstScale : 1;
+    const cometScale = (this.state === 'comet') ? 0.3 : 1;
 
-    // Head highlight (smaller, top-left)
-    const headGrad = ctx.createRadialGradient(
-      headX - 50, headY - 50, 5,
-      headX, headY, 100
-    );
-    headGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
-    headGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
-    headGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = headGrad;
-    ctx.beginPath();
-    ctx.arc(headX, headY, 100, 0, TAU);
-    ctx.fill();
+    // Slow hue cycle for surreal quality (±15° over 20s)
+    const hueShift = Math.sin(this.clock * 0.05) * 15;
 
-    // Body highlight (larger, top-left)
-    const bodyGrad = ctx.createRadialGradient(
-      bodyX - 50, bodyY - 50, 5,
-      bodyX, bodyY, 100
-    );
-    bodyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.20)');
-    bodyGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.04)');
-    bodyGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.arc(bodyX, bodyY, 100, 0, TAU);
-    ctx.fill();
+    // Light direction: top-left (consistent across all shapes)
+    const lightDX = -0.5, lightDY = -0.5;
 
-    // Shadow side (bottom-right, subtle dark)
-    const headShadowGrad = ctx.createRadialGradient(
-      headX + 60, headY + 60, 5,
-      headX, headY, 110
+    // Helper: draw multi-layer gradient on a circular shape
+    const drawSphere = (cx, cy, radius, baseHue, baseSat, baseLight) => {
+      // 1. BASE GRADIENT — radial, warm center → cool edge (volumetric sphere)
+      const baseGrad = ctx.createRadialGradient(
+        cx + lightDX * radius * 0.3, cy + lightDY * radius * 0.3, radius * 0.1,
+        cx, cy, radius
+      );
+      const centerL = Math.min(baseLight + 25, 75);
+      const edgeL = Math.max(baseLight - 20, 10);
+      baseGrad.addColorStop(0, `hsla(${baseHue + hueShift}, ${baseSat}%, ${centerL}%, 0.45)`);
+      baseGrad.addColorStop(0.6, `hsla(${baseHue + hueShift}, ${baseSat}%, ${baseLight}%, 0.30)`);
+      baseGrad.addColorStop(1, `hsla(${baseHue + hueShift - 10}, ${baseSat + 10}%, ${edgeL}%, 0.40)`);
+      ctx.fillStyle = baseGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+
+      // 2. KEY LIGHT — small bright highlight at top-left (specular)
+      const keyX = cx + lightDX * radius * 0.5;
+      const keyY = cy + lightDY * radius * 0.5;
+      const keyGrad = ctx.createRadialGradient(keyX, keyY, 0, keyX, keyY, radius * 0.4);
+      keyGrad.addColorStop(0, `hsla(${baseHue + hueShift + 20}, 40%, 95%, 0.55)`);
+      keyGrad.addColorStop(0.5, `hsla(${baseHue + hueShift + 10}, 30%, 80%, 0.15)`);
+      keyGrad.addColorStop(1, `hsla(${baseHue + hueShift}, 30%, 80%, 0)`);
+      ctx.fillStyle = keyGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+
+      // 3. FILL LIGHT — softer, opposite side (fills shadows)
+      const fillX = cx - lightDX * radius * 0.4;
+      const fillY = cy - lightDY * radius * 0.4;
+      const fillGrad = ctx.createRadialGradient(fillX, fillY, 0, fillX, fillY, radius * 0.6);
+      fillGrad.addColorStop(0, `hsla(${baseHue + hueShift - 30}, 25%, 55%, 0.20)`);
+      fillGrad.addColorStop(1, `hsla(${baseHue + hueShift}, 20%, 50%, 0)`);
+      ctx.fillStyle = fillGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+
+      // 4. RIM LIGHT — thin bright crescent at bottom-right edge (backlight)
+      const rimGrad = ctx.createRadialGradient(
+        cx - lightDX * radius * 0.8, cy - lightDY * radius * 0.8, radius * 0.7,
+        cx - lightDX * radius * 0.8, cy - lightDY * radius * 0.8, radius
+      );
+      rimGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      rimGrad.addColorStop(0.8, `hsla(${baseHue + hueShift + 180}, 40%, 85%, 0)`);
+      rimGrad.addColorStop(0.95, `hsla(${baseHue + hueShift + 180}, 50%, 90%, 0.25)`);
+      rimGrad.addColorStop(1, `hsla(${baseHue + hueShift + 180}, 60%, 95%, 0.10)`);
+      ctx.fillStyle = rimGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+
+      // 5. AMBIENT OCCLUSION — dark gradient at bottom (where head meets body)
+      const aoGrad = ctx.createRadialGradient(
+        cx, cy + radius * 0.6, 0,
+        cx, cy + radius * 0.6, radius * 0.5
+      );
+      aoGrad.addColorStop(0, `hsla(${baseHue + hueShift - 20}, 40%, 15%, 0.25)`);
+      aoGrad.addColorStop(1, `hsla(${baseHue + hueShift}, 30%, 20%, 0)`);
+      ctx.fillStyle = aoGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+    };
+
+    // Helper: draw subsurface scattering on thin edges (ears, tail)
+    const drawSSS = (cx, cy, radius, hue) => {
+      const sssGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      sssGrad.addColorStop(0, `hsla(${hue + hueShift}, 70%, 65%, 0.25)`);
+      sssGrad.addColorStop(0.5, `hsla(${hue + hueShift}, 80%, 55%, 0.10)`);
+      sssGrad.addColorStop(1, `hsla(${hue + hueShift}, 80%, 50%, 0)`);
+      ctx.fillStyle = sssGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, TAU);
+      ctx.fill();
+    };
+
+    // Apply to HEAD (200×200 at (256, 200+rocketY))
+    const headR = 100 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
+    drawSphere(256, 200 + rocketY, headR, 75, 35, 45);  // olive green base (hue=75, sat=35, light=45)
+
+    // Apply to BODY (180×200 at (256, 340+rocketY))
+    const bodyR = 95 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
+    drawSphere(256, 340 + rocketY, bodyR, 70, 40, 50);  // slightly different hue for body
+
+    // Subsurface scattering on ear tips (thin edges — light passes through)
+    drawSSS(200, 110 + rocketY, 30, 20);  // earL — warm orange SSS
+    drawSSS(312, 110 + rocketY, 30, 20);  // earR
+
+    // Subsurface scattering on tail tip (orange gradient — light passes through)
+    drawSSS(475, 340 + rocketY, 15, 25);  // tail6 tip
+
+    // BLOOM/glow on bright spots (surreal quality) — draw soft glow around
+    // the key light positions, then let the canvas's natural alpha blending
+    // create the bloom effect.
+    const bloomGrad = ctx.createRadialGradient(
+      256 + lightDX * headR * 0.5, 200 + rocketY + lightDY * headR * 0.5, 0,
+      256 + lightDX * headR * 0.5, 200 + rocketY + lightDY * headR * 0.5, headR * 0.8
     );
-    headShadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
-    headShadowGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.03)');
-    headShadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = headShadowGrad;
+    bloomGrad.addColorStop(0, `hsla(${50 + hueShift}, 60%, 90%, 0.15)`);
+    bloomGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = bloomGrad;
     ctx.beginPath();
-    ctx.arc(headX, headY, 110, 0, TAU);
+    ctx.arc(256, 200 + rocketY, headR * 1.5, 0, TAU);
     ctx.fill();
   }
 
