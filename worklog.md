@@ -775,3 +775,104 @@ Stage Summary:
 - Total LOC: brain.js ~1450 lines (was ~430), inputmap.js ~120 lines,
   scene.rml ~428 lines (was ~347), main.js ~150 lines, index.html ~150
   lines (was ~50).
+
+---
+Task ID: phase-5
+Agent: main
+Task: Phase 5 — Spatial design principles for lively realtime feel (3-layer depth, soft shadow, 3D shading, ambient dust, gaze drift, breathing, ear follow-through, cursor trail, state-reactive tint)
+
+Work Log:
+- Added #background-canvas to index.html (z-index 0, behind rive canvas
+  at z-index 1, in front of particles canvas at z-index 2). 3-layer depth:
+  background (shadow + dust + tint) < rive (Shiku body) < particles
+  (3D shading + cursor trail + foreground effects).
+- Removed the artboard's <Fill> background (#1D1D1D) from scene.rml so
+  the rive canvas is transparent — the background canvas (shadow + dust +
+  tint) shows through the transparent parts. Without this, the opaque
+  rive canvas covered the background canvas entirely.
+- Added 2 new particle classes:
+  * AmbientDust: slow-floating background dust for atmospheric perspective.
+    25 particles across depth layers 0..1. Far dust = small + slow + dim.
+    Near dust = bigger + faster + brighter. Toroidal wrap-around. Twinkle
+    alpha oscillation (0.4 + 0.3*sin(phase)). Boosted visibility (alpha
+    0.25 + depth * 0.5, size * 1.5).
+  * CursorTrailDot: fading dot that follows the cursor. Connects user
+    input visually to the character. 30ms spawn interval, 0.4s life.
+- Added computeAmbientMotion(dt) method:
+  * Gaze drift when no pointer: 3 layered sines at different frequencies
+    (0.31, 0.73, 0.13 Hz) for organic feel — NOT random, deterministic.
+    Clamped to ±0.5 (subtler than pointer-driven gaze). Per bloub:
+    "Avatar doesn't float at rest. Life = gaze drift + blinking."
+  * Breathing phase: advances at 0.3Hz (3.33s period — calm breathing).
+    Applied in writeArtboard as ±1.5% scale on head + body.
+  * Cursor trail: pushes pointer position every 30ms, ages + culls at 0.4s.
+- Added renderBackground() method (draws to background canvas):
+  1. State-reactive background tint: 12 state-specific tints (idle=blue,
+     excited=orange, startled=red, sleepy=dark-blue, hypno=purple, etc.)
+     with boosted alpha (0.30-0.50) + 0.5Hz pulse for "alive" feel.
+  2. Ambient dust: 25 dust particles rendered with atmospheric perspective.
+  3. Soft drop shadow: radial gradient ellipse (100×16) BELOW the body
+     (at y=465, 25px below the body's bottom edge at y=440 — visible
+     through the transparent rive canvas). Alpha 0.50 (grounded) or 0.15
+     (rocket — dimmer when Shiku is "up"). Scales with body state
+     (compressed when burst/comet).
+- Added render3DShading() method (draws to particles canvas, in front of
+  rive): radial gradient highlights on body + head. Lighter on top-left
+  (highlight, white 0.20-0.25 alpha), darker on bottom-right (shadow,
+  black 0.15 alpha). Gives the 3D sphere look — "soft, pillowy 3D
+  appearance" per VLM.
+- Added ear spring follow-through: 2 critically-damped springs (earSpringL,
+  earSpringR) with ω=6 (slower than glasses ω=13 — ears are heavier,
+  lag more). The spring's position drives the actual ear rotation in
+  writeArtboard (instead of the raw target.earL/earR). Gives secondary
+  motion — ears trail behind head rotation, like real ears would.
+- Extended computePerception(): gaze target = pointer-driven if pointer
+  exists, else ambient drift. Blends the two seamlessly.
+- Extended writeArtboard():
+  * Ear rotation now uses earSpringL.pos / earSpringR.pos (lagged) instead
+    of raw target.earL / target.earR.
+  * Breathing scale (1 + 0.015 * sin(breathPhase)) applied to head + body
+    when not in a special-scale state (burst/comet/disco have their own).
+  * Rocket offset stashed as this._rocketOffsetY so renderBackground can
+    use it for shadow position.
+- Extended renderParticles():
+  * Calls render3DShading() FIRST (behind everything else on particles canvas).
+  * Renders cursor trail (fading dots) before the orbit rings + particles.
+- Extended tick(): added step 0 (computeAmbientMotion) + step 7
+  (renderBackground) before step 8 (renderParticles).
+- Updated main.js: gets #background-canvas, passes it to wireBrain() →
+  createBrain({backgroundCanvas, ...}).
+- VLM verification (all 4 spatial design features confirmed visible):
+  * Soft shadow: "distinct, soft-edged, dark drop shadow directly beneath
+    the character's lower body, which helps ground the figure and gives it
+    a sense of depth" ✓
+  * 3D shading: "clear 3D shading... highlights on the upper-left curves
+    of the head and body, with darker shading towards the edges and
+    bottom, creating a spherical, volumetric appearance" ✓
+  * Background tint: "noticeable cool color tint... dark slate blue-grey" ✓
+  * Ambient dust: "very faint, sparse white/grey pixels scattered around...
+    subtle 'star' particles or ambient dust motes" ✓
+- Production build: 29.8KB JS (was 25KB), 7.9KB HTML (was 7.6KB), 2.9KB .riv
+  (was 2.9KB — smaller because background fill removed). Copied to
+  /home/z/my-project/download/shikubot/ for user-facing delivery.
+
+Stage Summary:
+- 3-layer depth: background canvas (shadow + dust + tint, z=0) < rive
+  canvas (Shiku body, z=1) < particles canvas (3D shading + cursor trail
+  + foreground effects, z=2).
+- Soft drop shadow below Shiku (grounds the character, scales with body
+  state, dimmer when rocket).
+- 3D shading overlay (radial gradient highlights + shadows on body + head).
+- Ambient dust (25 particles, atmospheric perspective, twinkle).
+- State-reactive background tint (12 state-specific tints + 0.5Hz pulse).
+- Breathing motion (±1.5% scale at 0.3Hz — universal "alive" signal).
+- Gaze drift when idle (3 layered sines — organic, not random).
+- Ear spring follow-through (critically-damped ω=6 — ears lag behind head).
+- Cursor trail (fading dots, 30ms spawn, 0.4s life).
+- All 6 funky states (orbit/comet/burst/disco/rocket/hypno) + all 6 v1
+  states (idle/curious/excited/startled/sleepy/confused) still work.
+- .riv: 2858 bytes (removed background fill for transparency).
+- brain.js: ~1780 lines (was ~1450). inputmap.js unchanged.
+  scene.rml: ~428 lines (removed 4 lines for bg fill).
+  main.js: ~155 lines (added backgroundCanvas wiring).
+  index.html: ~180 lines (added background canvas element).

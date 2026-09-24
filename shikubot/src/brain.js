@@ -465,6 +465,82 @@ class HypnoSwirl {
   }
 }
 
+// ── spatial design particles (Phase 5: layered depth + atmosphere) ────
+
+// AmbientDust: slow-floating background dust particles for atmospheric
+// perspective. Different depth layers — closer dust is bigger + moves
+// faster, farther dust is smaller + slower + dimmer (atmospheric fade).
+class AmbientDust {
+  constructor({ x, y, depth, hue = 200, cx = 256, cy = 256, scale = 200 }) {
+    this.x = x;             // normalized -1..1
+    this.y = y;
+    this.depth = depth;     // 0..1 (0 = far, 1 = near)
+    this.hue = hue;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+    this.vx = (0.02 + depth * 0.05) * (Math.random() < 0.5 ? -1 : 1);
+    this.vy = (0.01 + depth * 0.03) * (Math.random() < 0.5 ? -1 : 1);
+    this.phase = Math.random() * TAU;
+    this.size = 0.5 + depth * 1.5;  // closer = bigger
+    this.life = Infinity;  // ambient dust never dies
+    this.age = 0;
+  }
+  update(dt) {
+    this.age += dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    // Wrap around (toroidal)
+    if (this.x > 1) this.x = -1;
+    if (this.x < -1) this.x = 1;
+    if (this.y > 1) this.y = -1;
+    if (this.y < -1) this.y = 1;
+    this.phase += dt * 0.5;
+  }
+  render(ctx) {
+    // Twinkle: subtle alpha oscillation
+    const twinkle = 0.4 + 0.3 * Math.sin(this.phase);
+    // Atmospheric perspective: farther = dimmer. Phase 5: boosted visibility.
+    const alpha = twinkle * (0.25 + this.depth * 0.5);
+    const r = this.size * 1.5;  // Phase 5: bigger dust
+    const x = this.cx + this.x * this.scale;
+    const y = this.cy + this.y * this.scale;
+    ctx.fillStyle = `hsla(${this.hue}, 40%, 85%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+  }
+}
+
+// CursorTrailDot: fading dot that follows the cursor, leaving a trail.
+// Connects user input visually to the character.
+class CursorTrailDot {
+  constructor({ x, y, life = 0.4, hue = 25, cx = 256, cy = 256, scale = 200 }) {
+    this.x = x;  // normalized -1..1 (relative to artboard center)
+    this.y = y;
+    this.life = life;
+    this.age = 0;
+    this.hue = hue;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+  }
+  update(dt) {
+    this.age += dt;
+  }
+  render(ctx) {
+    const fadeOut = clamp((this.life - this.age) / this.life, 0, 1);
+    const alpha = fadeOut * 0.4;
+    const r = 3 * fadeOut;
+    const x = this.cx + this.x * this.scale;
+    const y = this.cy + this.y * this.scale;
+    ctx.fillStyle = `hsla(${this.hue}, 70%, 60%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+  }
+}
+
 // ── the brain ──────────────────────────────────────────────────────────
 
 class Brain {
@@ -477,9 +553,10 @@ class Brain {
    * @param {Object} opts.artboard - artboard instance from `file.defaultArtboard()`
    * @param {Object} opts.stateMachineInstance - StateMachineInstance from `new rive.StateMachineInstance(sm, artboard)`
    */
-  constructor({ riveCanvas, particlesCanvas, rive, file, artboard, stateMachineInstance: sm, externalAdvance = true }) {
+  constructor({ riveCanvas, particlesCanvas, backgroundCanvas, rive, file, artboard, stateMachineInstance: sm, externalAdvance = true }) {
     this.riveCanvas = riveCanvas;
     this.particlesCanvas = particlesCanvas;
+    this.backgroundCanvas = backgroundCanvas;  // Phase 5: behind-rive layer for shadow + dust + tint
     this.rive = rive;
     this.file = file;
     this.artboard = artboard;
@@ -505,6 +582,22 @@ class Brain {
     // Critically-damped: x'' = -ω²(x - target) - 2ωx'  with ω=13, ζ=1.
     // Master prompt: "head-tilt settle 0.3s (ω≈13, ζ=1)" — repurposed for glasses.
     this.glassesSpring = { pos: 0, vel: 0, target: 0 };
+
+    // 4b. Ear spring state (Phase 5: follow-through). Ears lag behind headTilt
+    // with critically-damped spring — gives secondary motion + "alive" feel.
+    // ω=6 (slower than glasses, ~0.67s settle) — ears are heavier, lag more.
+    this.earSpringL = { pos: 0, vel: 0, target: 0 };
+    this.earSpringR = { pos: 0, vel: 0, target: 0 };
+
+    // 4c. Ambient motion state (Phase 5: lively realtime feel).
+    // Gaze drift when no pointer (layered sines for organic feel, not random).
+    // Breathing: ±1.5% scale at 0.3Hz (universal "alive" signal).
+    this.ambientGaze = { x: 0, y: 0 };
+    this.breathPhase = 0;
+
+    // 4d. Cursor trail (Phase 5: connect user input visually to the character).
+    this.cursorTrail = [];  // array of recent pointer positions (normalized -1..1)
+    this._lastCursorTrailAt = 0;
 
     // 5. Current target values (the brain's per-frame "what should be").
     // These are written to inputs (contract) + artboard shapes (visual).
@@ -569,12 +662,198 @@ class Brain {
     return shapes;
   }
 
+  // ── Phase 5: spawn ambient dust (background atmosphere layer) ──────
+  spawnAmbientDust() {
+    // 25 dust particles across 3 depth layers (far/mid/near).
+    // Far: small + slow + dim. Near: bigger + faster + brighter.
+    this._ambientDust = [];
+    for (let i = 0; i < 25; i++) {
+      const depth = i / 25;  // 0..1, evenly distributed
+      this._ambientDust.push(new AmbientDust({
+        x: (Math.random() - 0.5) * 2,
+        y: (Math.random() - 0.5) * 2,
+        depth,
+        hue: 200 + Math.random() * 40,  // blue-ish haze
+      }));
+    }
+  }
+
+  // ── Phase 5: ambient motion (lively realtime feel) ────────────────
+  // Per bloub: "Avatar doesn't float at rest. Life = gaze drift + blinking."
+  // When no pointer, eyes wander naturally via layered sines (deterministic,
+  // organic — not random). Breathing: ±1.5% scale at 0.3Hz (universal "alive").
+  computeAmbientMotion(dt) {
+    // Gaze drift: 3 layered sines at different frequencies for organic feel.
+    // Output clamped to ±0.5 (subtler than pointer-driven gaze).
+    const t = this.clock;
+    const driftX = Math.sin(t * 0.31) * 0.25
+                 + Math.sin(t * 0.73 + 1.2) * 0.15
+                 + Math.sin(t * 0.13 + 2.5) * 0.10;
+    const driftY = Math.sin(t * 0.27 + 0.5) * 0.20
+                 + Math.sin(t * 0.61 + 3.1) * 0.12
+                 + Math.sin(t * 0.11 + 1.7) * 0.08;
+    this.ambientGaze.x = clamp(driftX, -0.5, 0.5);
+    this.ambientGaze.y = clamp(driftY, -0.5, 0.5);
+
+    // Breathing phase advances at 0.3Hz (3.33s period — calm, relaxed breathing)
+    this.breathPhase += dt * 0.3;
+
+    // Cursor trail: push current pointer position every 30ms (if pointer exists)
+    if (this.pointer) {
+      if (t - this._lastCursorTrailAt > 0.03) {
+        this._lastCursorTrailAt = t;
+        const box = this.riveCanvas.getBoundingClientRect();
+        if (box.width > 0) {
+          const cx = box.left + box.width / 2;
+          const cy = box.top + box.height / 2;
+          const halfW = Math.max(1, window.innerWidth / 2);
+          const halfH = Math.max(1, window.innerHeight / 2);
+          this.cursorTrail.push({
+            x: clamp((this.pointer.x - cx) / halfW, -1.5, 1.5),
+            y: clamp((this.pointer.y - cy) / halfH, -1.5, 1.5),
+            age: 0,
+          });
+        }
+      }
+    }
+    // Age + cull trail dots
+    this.cursorTrail = this.cursorTrail.filter(d => {
+      d.age += dt;
+      return d.age < 0.4;
+    });
+  }
+
+  // ── Phase 5: renderBackground (behind-rive layer) ──────────────────
+  // Draws to the background canvas (z-index 0, behind the rive canvas).
+  // Layers (back to front):
+  //   1. State-reactive background tint (subtle color shift based on state)
+  //   2. Soft drop shadow below Shiku (grounds the character)
+  //   3. Ambient dust particles (atmospheric perspective)
+  renderBackground() {
+    if (!this.backgroundCanvas) return;
+    const ctx = this.backgroundCanvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 512);
+
+    // 1. State-reactive background tint. Subtle hue shift based on state.
+    // Default is dark gray #1D1D1D; we overlay translucent color.
+    // Phase 5: boosted alpha for visibility (was 0.15-0.30, now 0.30-0.50).
+    const stateTints = {
+      idle:     { hue: 200, sat: 30, light: 18, alpha: 0.30 },
+      curious:  { hue: 50,  sat: 50, light: 25, alpha: 0.30 },
+      excited:  { hue: 30,  sat: 70, light: 30, alpha: 0.40 },
+      startled: { hue: 0,   sat: 70, light: 25, alpha: 0.45 },
+      sleepy:   { hue: 220, sat: 40, light: 15, alpha: 0.35 },
+      confused: { hue: 280, sat: 40, light: 20, alpha: 0.35 },
+      orbit:    { hue: 180, sat: 50, light: 22, alpha: 0.40 },
+      comet:    { hue: 210, sat: 60, light: 22, alpha: 0.40 },
+      burst:    { hue: 0,   sat: 60, light: 27, alpha: 0.45 },
+      disco:    { hue: (this.clock * 60) % 360, sat: 60, light: 27, alpha: 0.45 },
+      rocket:   { hue: 25,  sat: 80, light: 30, alpha: 0.50 },
+      hypno:    { hue: 280, sat: 60, light: 22, alpha: 0.45 },
+    };
+    const tint = stateTints[this.state] || stateTints.idle;
+    // Pulsing alpha for "alive" feel (subtle 0.5Hz pulse)
+    const pulse = 0.85 + 0.15 * Math.sin(this.clock * 0.5 * TAU);
+    ctx.fillStyle = `hsla(${tint.hue}, ${tint.sat}%, ${tint.light}%, ${tint.alpha * pulse})`;
+    ctx.fillRect(0, 0, 512, 512);
+
+    // 2. Ambient dust (atmospheric perspective layer).
+    if (this._ambientDust) {
+      for (const dust of this._ambientDust) dust.render(ctx);
+    }
+
+    // 3. Soft drop shadow below Shiku. Grounds the character.
+    // Shadow position: BELOW the body (body spans y=240-440, so shadow at y=465
+    // is 25px below the body's bottom edge — visible through the transparent
+    // rive canvas).
+    // Shadow scales with body state (compressed when burst/comet, normal otherwise)
+    // Shadow moves with rocket offset (rises with Shiku, gets dimmer)
+    const bodyY = 340 + (this._rocketOffsetY || 0);
+    const shadowY = bodyY + 125;  // 125px below body center = below the body's bottom edge
+    const shadowX = 256;
+    let shadowScale = 1;
+    if (this.state === 'burst' && this._burstScale) shadowScale = this._burstScale;
+    if (this.state === 'comet') shadowScale = 0.3;
+    // Shadow size: ellipse 100×16, scaled (wider than body for grounding effect)
+    const shadowW = 100 * shadowScale;
+    const shadowH = 16 * shadowScale;
+    // Shadow alpha: dimmer when Shiku is "up" (rocket), normal when grounded.
+    // Phase 5: boosted from 0.30 to 0.50 for visibility.
+    const shadowAlpha = (this.state === 'rocket') ? 0.15 : 0.50;
+    // Soft shadow via radial gradient
+    const grad = ctx.createRadialGradient(shadowX, shadowY, 0, shadowX, shadowY, shadowW);
+    grad.addColorStop(0, `rgba(0, 0, 0, ${shadowAlpha})`);
+    grad.addColorStop(0.7, `rgba(0, 0, 0, ${shadowAlpha * 0.4})`);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(shadowX, shadowY, shadowW, shadowH, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  // ── Phase 5: render3DShading (on particles canvas, in front of rive) ─
+  // Draws radial gradient highlights on body + head to give 3D sphere look.
+  // Highlight: top-left, light + low alpha. Shadow: bottom-right, dark + low alpha.
+  render3DShading() {
+    if (!this.particlesCanvas) return;
+    const ctx = this.particlesCanvas.getContext('2d');
+    const s = this.shapes;
+    if (!s.head || !s.body) return;
+
+    // Highlight position: top-left of each shape.
+    // Head at (256, 200 + rocketOffset), body at (256, 340 + rocketOffset)
+    const rocketY = this._rocketOffsetY || 0;
+    const headX = 256, headY = 200 + rocketY;
+    const bodyX = 256, bodyY = 340 + rocketY;
+
+    // Head highlight (smaller, top-left)
+    const headGrad = ctx.createRadialGradient(
+      headX - 50, headY - 50, 5,
+      headX, headY, 100
+    );
+    headGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+    headGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
+    headGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.arc(headX, headY, 100, 0, TAU);
+    ctx.fill();
+
+    // Body highlight (larger, top-left)
+    const bodyGrad = ctx.createRadialGradient(
+      bodyX - 50, bodyY - 50, 5,
+      bodyX, bodyY, 100
+    );
+    bodyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.20)');
+    bodyGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.04)');
+    bodyGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(bodyX, bodyY, 100, 0, TAU);
+    ctx.fill();
+
+    // Shadow side (bottom-right, subtle dark)
+    const headShadowGrad = ctx.createRadialGradient(
+      headX + 60, headY + 60, 5,
+      headX, headY, 110
+    );
+    headShadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
+    headShadowGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.03)');
+    headShadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = headShadowGrad;
+    ctx.beginPath();
+    ctx.arc(headX, headY, 110, 0, TAU);
+    ctx.fill();
+  }
+
   // ── lifecycle ─────────────────────────────────────────────────────
 
   start() {
     window.addEventListener('pointermove', this.onPointerMove, { passive: true });
     document.addEventListener('pointerleave', this.onPointerLeave);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // Phase 5: spawn ambient dust for atmospheric perspective (background layer).
+    this.spawnAmbientDust();
     this.raf = requestAnimationFrame(this.tick);
     console.log('[brain] started. window.shiku = { go, poke, pet }');
   }
@@ -768,10 +1047,14 @@ class Brain {
     this.lastFrame = ms;
     this.clock += dt;
 
+    // 0. Ambient motion (Phase 5: gaze drift when idle + breathing + cursor trail).
+    //    Runs FIRST so the perception layer can blend ambient drift with pointer.
+    this.computeAmbientMotion(dt);
+
     // 1. Compute per-frame perception (ease-outs, layered ω).
     this.computePerception(dt);
 
-    // 2. Update springs (glasses wobble) with fixed 1/120s substep.
+    // 2. Update springs (glasses wobble + ear follow-through) with fixed 1/120s substep.
     this.updateSprings(dt);
 
     // 3. Update + spawn particles.
@@ -790,7 +1073,11 @@ class Brain {
     // 6. Write per-frame values directly to artboard shapes (for visual).
     this.writeArtboard();
 
-    // 7. Render particle overlay.
+    // 7. Render background layer (behind rive: shadow + dust + tint).
+    this.renderBackground();
+
+    // 8. Render particle overlay (in front of rive: cursor trail + 3D shading +
+    //    orbit rings + comet ribbons + regular particles + hypno swirls).
     this.renderParticles();
   }
 
@@ -822,8 +1109,11 @@ class Brain {
     const tiltTarget = nx * 0.5;
     this.perception.headTilt.x = expEase(this.perception.headTilt.x, tiltTarget, 8, dt);
 
-    const gazeTargetX = nx * 1.0;
-    const gazeTargetY = ny * 1.0;
+    // Gaze target: pointer-driven if pointer exists, else ambient drift.
+    // Per bloub: "Life = gaze drift + blinking" — when no pointer, eyes
+    // wander naturally via layered sines (deterministic, organic).
+    const gazeTargetX = this.pointer ? nx * 1.0 : this.ambientGaze.x;
+    const gazeTargetY = this.pointer ? ny * 1.0 : this.ambientGaze.y;
     this.perception.gaze.x = expEase(this.perception.gaze.x, gazeTargetX, 10, dt);
     this.perception.gaze.y = expEase(this.perception.gaze.y, gazeTargetY, 10, dt);
 
@@ -1020,6 +1310,27 @@ class Brain {
       this.target.glassesLift = this.glassesSpring.pos;
       this.target.glassesCrooked = clamp(Math.abs(this.glassesSpring.pos) * 0.3, 0, 1);
     }
+
+    // ── Phase 5: ear follow-through springs ─────────────────────────
+    // Ears lag behind headTilt with critically-damped spring (ω=6, slower
+    // than glasses — ears are heavier, lag more). Gives secondary motion.
+    // Target = the brain's target.earL/earR values (set by state overrides).
+    // The spring's pos drives the actual ear rotation in writeArtboard.
+    const earω = 6;
+    const earω2 = earω * earω;
+    this.earSpringL.target = this.target.earL;
+    this.earSpringR.target = this.target.earR;
+    for (let i = 0; i < substeps; i++) {
+      const accelL = -earω2 * (this.earSpringL.pos - this.earSpringL.target)
+                   - 2 * earω * this.earSpringL.vel;
+      this.earSpringL.vel += accelL * subDt;
+      this.earSpringL.pos += this.earSpringL.vel * subDt;
+
+      const accelR = -earω2 * (this.earSpringR.pos - this.earSpringR.target)
+                   - 2 * earω * this.earSpringR.vel;
+      this.earSpringR.vel += accelR * subDt;
+      this.earSpringR.pos += this.earSpringR.vel * subDt;
+    }
   }
 
   // ── particles ──────────────────────────────────────────────────────
@@ -1189,6 +1500,23 @@ class Brain {
     const ctx = this.particlesCanvas.getContext('2d');
     ctx.clearRect(0, 0, 512, 512);
 
+    // ── Phase 5: 3D shading overlay (drawn FIRST, behind everything else
+    // on the particles canvas). Radial gradient highlights on body + head
+    // give the 3D sphere look. The Rive canvas (with the flat-colored body)
+    // is BEHIND this canvas, so the shading applies ON TOP of the body.
+    this.render3DShading();
+
+    // ── Phase 5: cursor trail (behind the foreground particles).
+    // Fading dots that follow the cursor — connects user input visually.
+    for (const dot of this.cursorTrail) {
+      const alpha = clamp((0.4 - dot.age) / 0.4, 0, 1) * 0.5;
+      const r = 4 * (1 - dot.age / 0.4);
+      ctx.fillStyle = `hsla(25, 70%, 60%, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(256 + dot.x * 200, 256 + dot.y * 200, r, 0, TAU);
+      ctx.fill();
+    }
+
     // For orbit state: render BACK halves of orbit rings first (behind body).
     // The Rive canvas (with the body) is drawn between this renderParticles
     // call and the next frame's renderParticles — but since the overlay
@@ -1298,20 +1626,22 @@ class Brain {
       } else if (phase < 1.0) {
         rocketOffsetY = -60 + ((phase - 0.6) / 0.4) * 60;  // fall back
       }
-      s.head.y = 200 + rocketOffsetY;
-      if (s.body) s.body.y = 340 + rocketOffsetY;
-    } else {
-      s.head.y = 200;
-      if (s.body) s.body.y = 340;
     }
+    // Stash the rocket offset so renderBackground can use it (for shadow position).
+    this._rocketOffsetY = rocketOffsetY;
+    s.head.y = 200 + rocketOffsetY;
+    if (s.body) s.body.y = 340 + rocketOffsetY;
 
     // ── Ears: ±20° (±0.35 rad) for alert/droop ───────────────────────
+    // Phase 5: use the EAR SPRING position (lagged follow-through) instead
+    // of the raw target. The spring's critically-damped lag gives secondary
+    // motion — ears trail behind head rotation, like real ears would.
     if (s.earL) {
-      s.earL.rotation = this.target.earL * 0.35;
+      s.earL.rotation = this.earSpringL.pos * 0.35;
       s.earL.y = 110 + rocketOffsetY;
     }
     if (s.earR) {
-      s.earR.rotation = this.target.earR * 0.35;
+      s.earR.rotation = this.earSpringR.pos * 0.35;
       s.earR.y = 110 + rocketOffsetY;
     }
     if (s.hairTuft) s.hairTuft.y = 95 + rocketOffsetY;
@@ -1339,6 +1669,12 @@ class Brain {
       s.glasses.rotation = this.target.glassesCrooked * 0.2;
     }
 
+    // ── Phase 5: breathing motion (universal "alive" signal).
+    // ±1.5% scale at 0.3Hz (3.33s period — calm, relaxed breathing).
+    // Applied to head + body in non-special states (not burst/comet/disco
+    // which have their own scale overrides).
+    const breathing = 1 + 0.015 * Math.sin(this.breathPhase);
+
     // ── Burst state: body + head collapse to 0.166 then regrow ────────
     // _burstScale is computed in computePerception() for the burst state.
     const burstScale = (this.state === 'burst' && this._burstScale) ? this._burstScale : 1;
@@ -1350,11 +1686,12 @@ class Brain {
         s.body.scaleY = burstScale;
       }
     } else {
-      s.head.scaleX = 1;
-      s.head.scaleY = 1;
+      // Apply breathing to head + body when not in a special-scale state
+      s.head.scaleX = breathing;
+      s.head.scaleY = breathing;
       if (s.body) {
-        s.body.scaleX = 1;
-        s.body.scaleY = 1;
+        s.body.scaleX = breathing;
+        s.body.scaleY = breathing;
       }
     }
 

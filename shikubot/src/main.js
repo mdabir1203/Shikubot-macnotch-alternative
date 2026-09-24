@@ -38,13 +38,15 @@ if (typeof Rive !== 'function') {
 
 const RIVE_CANVAS_ID = 'rive-canvas';
 const PARTICLES_CANVAS_ID = 'particles-canvas';
+const BACKGROUND_CANVAS_ID = 'background-canvas';  // Phase 5: behind-rive layer for shadow + dust + tint
 const STATE_MACHINE_NAME = 'Brain';
 
 async function init() {
   const riveCanvas = document.getElementById(RIVE_CANVAS_ID);
   const particlesCanvas = document.getElementById(PARTICLES_CANVAS_ID);
-  if (!riveCanvas || !particlesCanvas) {
-    throw new Error(`required canvas elements not found (need #${RIVE_CANVAS_ID} + #${PARTICLES_CANVAS_ID})`);
+  const backgroundCanvas = document.getElementById(BACKGROUND_CANVAS_ID);
+  if (!riveCanvas || !particlesCanvas || !backgroundCanvas) {
+    throw new Error(`required canvas elements not found (need #${RIVE_CANVAS_ID} + #${PARTICLES_CANVAS_ID} + #${BACKGROUND_CANVAS_ID})`);
   }
 
   // 1. Fetch the .riv bytes + pass via `buffer` (the basic package's `src`
@@ -67,7 +69,7 @@ async function init() {
     onLoad: () => {
       console.log('[shikubot] onLoad fired');
       try {
-        wireBrain(riveInst, riveCanvas, particlesCanvas);
+        wireBrain(riveInst, riveCanvas, particlesCanvas, backgroundCanvas);
       } catch (e) {
         console.error('[shikubot] wireBrain threw:', e);
         window.shikubotError = 'wireBrain: ' + String(e) + (e.stack ? '\n' + e.stack : '');
@@ -81,7 +83,7 @@ async function init() {
   window.riveInst = riveInst;
 }
 
-function wireBrain(riveInst, riveCanvas, particlesCanvas) {
+function wireBrain(riveInst, riveCanvas, particlesCanvas, backgroundCanvas) {
   // Access the basic package's internals (private but JS-accessible):
   //   - riveInst.runtime: the canvas-advanced rive instance (has SMIInput,
   //     Fit, Alignment, etc.)
@@ -111,6 +113,7 @@ function wireBrain(riveInst, riveCanvas, particlesCanvas) {
   const brain = createBrain({
     riveCanvas,
     particlesCanvas,
+    backgroundCanvas,  // Phase 5: behind-rive layer for shadow + dust + tint
     rive: runtime,
     file: riveInst.file,
     artboard,

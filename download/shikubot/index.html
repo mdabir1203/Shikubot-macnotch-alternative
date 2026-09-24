@@ -22,13 +22,16 @@
       place-items: center;
       touch-action: none; /* brain owns pointer perception */
     }
-    #rive-canvas, #particles-canvas {
+    #background-canvas, #rive-canvas, #particles-canvas {
       position: absolute;
       width: min(70vmin, 512px);
       height: min(70vmin, 512px);
       top: 38%; left: 50%;
       transform: translate(-50%, -50%);
     }
+    /* 3-layer depth: background (shadow + dust + tint) < rive (Shiku body)
+       < particles (foreground effects, cursor trail, 3D shading) */
+    #background-canvas { z-index: 0; pointer-events: none; }
     #rive-canvas { z-index: 1; }
     #particles-canvas { z-index: 2; pointer-events: none; }
 
@@ -115,10 +118,11 @@
     .state-badge .label { opacity: 0.6; }
     .state-badge .value { color: #F08A3F; }
   </style>
-  <script type="module" crossorigin src="./assets/index-RcMtekKl.js"></script>
+  <script type="module" crossorigin src="./assets/index-BlM8-kVC.js"></script>
 </head>
 <body>
   <main class="stage">
+    <canvas id="background-canvas" width="512" height="512"></canvas>
     <canvas id="rive-canvas" width="512" height="512"></canvas>
     <canvas id="particles-canvas" width="512" height="512"></canvas>
   </main>

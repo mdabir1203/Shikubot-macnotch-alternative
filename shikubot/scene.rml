@@ -17,10 +17,10 @@
         <!-- Per gotchas: artboard needs a LayoutComponentStyle linked via styleId
              or its contents don't draw at runtime. -->
         <LayoutComponentStyle name="Artboard Style" id="0:300"/>
-        <!-- Background fill (artboard's own fill, paints first) -->
-        <Fill name="Background">
-            <SolidColor colorValue="FF1D1D1D" name="BgColor"/>
-        </Fill>
+        <!-- Phase 5: background fill REMOVED — the body CSS + background
+             canvas now provide the background. This lets the background
+             canvas (shadow + dust + state-reactive tint) show through
+             the transparent rive canvas. -->
 
         <!-- ============================================================
              BODY PARTS — declared front-to-back (mouth first = on top,
