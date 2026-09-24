@@ -28,61 +28,105 @@
              Shape's x/y; the child's own x/y offsets it within the shape.
              ============================================================ -->
 
-        <!-- 1. MOUTH (top, frontmost) — lower third of head -->
+        <!-- 1. MOUTH — radial gradient: bright inner → deep dark edge (depth) -->
         <Shape x="256" y="270" name="mouth" id="0:10">
             <Ellipse width="40" height="20" originX="0.5" originY="0.5" name="mouthPath"/>
             <Fill name="mouthFill">
-                <SolidColor colorValue="FFA9322C" name="mouthColor"/>
+                <RadialGradient startX="0" startY="0" endX="22.0" endY="0.0" name="mouthGrad">
+                    <GradientStop colorValue="FFC5403A" position="0"/>
+                    <GradientStop colorValue="FFA9322C" position="0.4"/>
+                    <GradientStop colorValue="FF802520" position="0.85"/>
+                    <GradientStop colorValue="FF601810" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
 
-        <!-- 2. GLASSES — two lens rings (stroke only, eyes show through) -->
+        <!-- 2. GLASSES — metallic gradient stroke (dark→bright→dark for reflective look) -->
         <Shape x="256" y="180" name="glasses" id="0:30">
             <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="-30" y="0" name="leftLens"/>
             <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="30" y="0" name="rightLens"/>
             <Stroke thickness="4" cap="round" join="round" name="glassesStroke">
-                <SolidColor colorValue="FF202020" name="glassesColor"/>
+                <LinearGradient startX="-30" startY="0" endX="30" endY="0" name="glassesGrad">
+                    <GradientStop colorValue="FF1A1A1A" position="0"/>
+                    <GradientStop colorValue="FF404040" position="0.3"/>
+                    <GradientStop colorValue="FF707070" position="0.5"/>
+                    <GradientStop colorValue="FF303030" position="0.7"/>
+                    <GradientStop colorValue="FF1A1A1A" position="1"/>
+                </LinearGradient>
             </Stroke>
         </Shape>
 
         <!-- 3. EYES — right eye then left eye, each: lid → pupil → sclera
              (lid in front so blink covers pupil/sclera; sclera behind both) -->
-        <!-- Right eye -->
+        <!-- Right eye — lid has matching head gradient for seamless blink; -->
+        <!-- pupil has specular highlight (top-left bright spot); sclera has depth gradient -->
         <Shape x="286" y="180" name="eyeR_lid" id="0:20">
             <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidRPath"/>
             <Fill name="lidRFill">
-                <SolidColor colorValue="FF8E9A3B" name="lidRColor"/>
+                <RadialGradient startX="-10" startY="-10" endX="20.0" endY="-10.0" name="lidRGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="286" y="180" name="eyeR_pupil" id="0:21">
             <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilRPath"/>
             <Fill name="pupilRFill">
-                <SolidColor colorValue="FF141414" name="pupilRColor"/>
+                <RadialGradient startX="-3" startY="-3" endX="7.0" endY="-3.0" name="pupilRGrad">
+                    <GradientStop colorValue="FF4A4A3A" position="0"/>
+                    <GradientStop colorValue="FF2A2A2A" position="0.2"/>
+                    <GradientStop colorValue="FF141414" position="0.5"/>
+                    <GradientStop colorValue="FF0A0A0A" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="286" y="180" name="eyeR_sclera" id="0:22">
             <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraRPath"/>
             <Fill name="scleraRFill">
-                <SolidColor colorValue="FFFFFFFF" name="scleraRColor"/>
+                <RadialGradient startX="0" startY="0" endX="25.0" endY="0.0" name="scleraRGrad">
+                    <GradientStop colorValue="FFFFFFFF" position="0"/>
+                    <GradientStop colorValue="FFF5F5F5" position="0.4"/>
+                    <GradientStop colorValue="FFE0E0E0" position="0.85"/>
+                    <GradientStop colorValue="FFC8C8C8" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
-        <!-- Left eye -->
+        <!-- Left eye — same gradient pattern as right eye -->
         <Shape x="226" y="180" name="eyeL_lid" id="0:23">
             <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidLPath"/>
             <Fill name="lidLFill">
-                <SolidColor colorValue="FF8E9A3B" name="lidLColor"/>
+                <RadialGradient startX="-10" startY="-10" endX="20.0" endY="-10.0" name="lidLGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="226" y="180" name="eyeL_pupil" id="0:24">
             <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilLPath"/>
             <Fill name="pupilLFill">
-                <SolidColor colorValue="FF141414" name="pupilLColor"/>
+                <RadialGradient startX="-3" startY="-3" endX="7.0" endY="-3.0" name="pupilLGrad">
+                    <GradientStop colorValue="FF4A4A3A" position="0"/>
+                    <GradientStop colorValue="FF2A2A2A" position="0.2"/>
+                    <GradientStop colorValue="FF141414" position="0.5"/>
+                    <GradientStop colorValue="FF0A0A0A" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="226" y="180" name="eyeL_sclera" id="0:25">
             <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraLPath"/>
             <Fill name="scleraLFill">
-                <SolidColor colorValue="FFFFFFFF" name="scleraLColor"/>
+                <RadialGradient startX="0" startY="0" endX="25.0" endY="0.0" name="scleraLGrad">
+                    <GradientStop colorValue="FFFFFFFF" position="0"/>
+                    <GradientStop colorValue="FFF5F5F5" position="0.4"/>
+                    <GradientStop colorValue="FFE0E0E0" position="0.85"/>
+                    <GradientStop colorValue="FFC8C8C8" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
 
@@ -95,82 +139,132 @@
             </PointsPath>
             <Fill name="tuftFill">
                 <LinearGradient startX="0" startY="-15" endX="0" endY="5" name="tuftGradient">
-                    <GradientStop colorValue="FFD95B2B" position="0"/>
-                    <GradientStop colorValue="FFF08A3F" position="1"/>
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FFD95B2B" position="0.4"/>
+                    <GradientStop colorValue="FFA04020" position="1"/>
                 </LinearGradient>
             </Fill>
         </Shape>
 
-        <!-- 5. EARS — alert pose (triangles pointing up), behind hair -->
+        <!-- 5. EARS — linear gradient with subsurface scattering (warm tip → fur → shadow → dark base) -->
         <Shape x="312" y="110" name="earR" id="0:50">
             <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earRPath"/>
             <Fill name="earRFill">
-                <SolidColor colorValue="FF8E9A3B" name="earRColor"/>
+                <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earRGrad">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.25"/>
+                    <GradientStop colorValue="FF6E7828" position="0.6"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </LinearGradient>
             </Fill>
         </Shape>
         <Shape x="200" y="110" name="earL" id="0:51">
             <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earLPath"/>
             <Fill name="earLFill">
-                <SolidColor colorValue="FF8E9A3B" name="earLColor"/>
+                <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earLGrad">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.25"/>
+                    <GradientStop colorValue="FF6E7828" position="0.6"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </LinearGradient>
             </Fill>
         </Shape>
 
-        <!-- 6. HEAD — near-circular, 200×200 (45% of total mascot height) -->
+        <!-- 6. HEAD — radial gradient sphere lighting: highlight → mid → base → shadow → rim -->
         <Shape x="256" y="200" name="head" id="0:60">
             <Ellipse width="200" height="200" originX="0.5" originY="0.5" name="headPath"/>
             <Fill name="headFill">
-                <SolidColor colorValue="FF8E9A3B" name="headColor"/>
+                <RadialGradient startX="-40" startY="-40" endX="80.0" endY="-40.0" name="headGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
 
-        <!-- 7. BODY — elongated ellipse, 180×200, slightly lighter than head -->
+        <!-- 7. BODY — radial gradient sphere lighting (shifted light angle from head) -->
         <Shape x="256" y="340" name="body" id="0:70">
             <Ellipse width="180" height="200" originX="0.5" originY="0.5" name="bodyPath"/>
             <Fill name="bodyFill">
-                <SolidColor colorValue="FFA9B44E" name="bodyColor"/>
+                <RadialGradient startX="-40" startY="-40" endX="80.0" endY="-40.0" name="bodyGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.15"/>
+                    <GradientStop colorValue="FF9BA84A" position="0.4"/>
+                    <GradientStop colorValue="FF7A8535" position="0.7"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
 
         <!-- 8. TAIL — 6 tapering segments, behind body.
              tail1 is largest (closest to body), tail6 is tip (orange gradient).
              Declared tip-first so the base is drawn last (behind other segments). -->
+        <!-- 8. TAIL — 6 segments with radial gradient sphere lighting (highlight → base → shadow) -->
         <Shape x="475" y="340" name="tail6" id="0:80">
             <Ellipse width="10" height="10" originX="0.5" originY="0.5" name="tail6Path"/>
             <Fill name="tail6Fill">
                 <LinearGradient startX="-5" startY="0" endX="5" endY="0" name="tail6Grad">
-                    <GradientStop colorValue="FFD95B2B" position="0"/>
-                    <GradientStop colorValue="FFF08A3F" position="1"/>
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FFD95B2B" position="0.5"/>
+                    <GradientStop colorValue="FFA04020" position="1"/>
                 </LinearGradient>
             </Fill>
         </Shape>
         <Shape x="460" y="340" name="tail5" id="0:81">
             <Ellipse width="14" height="14" originX="0.5" originY="0.5" name="tail5Path"/>
             <Fill name="tail5Fill">
-                <SolidColor colorValue="FF8E9A3B" name="tail5Color"/>
+                <RadialGradient startX="-2" startY="-2" endX="7.0" endY="-2.0" name="tail5Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="445" y="340" name="tail4" id="0:82">
             <Ellipse width="18" height="18" originX="0.5" originY="0.5" name="tail4Path"/>
             <Fill name="tail4Fill">
-                <SolidColor colorValue="FF8E9A3B" name="tail4Color"/>
+                <RadialGradient startX="-3" startY="-3" endX="8.0" endY="-3.0" name="tail4Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="425" y="340" name="tail3" id="0:83">
             <Ellipse width="22" height="22" originX="0.5" originY="0.5" name="tail3Path"/>
             <Fill name="tail3Fill">
-                <SolidColor colorValue="FF8E9A3B" name="tail3Color"/>
+                <RadialGradient startX="-3" startY="-3" endX="10.0" endY="-3.0" name="tail3Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="400" y="340" name="tail2" id="0:84">
             <Ellipse width="26" height="26" originX="0.5" originY="0.5" name="tail2Path"/>
             <Fill name="tail2Fill">
-                <SolidColor colorValue="FF8E9A3B" name="tail2Color"/>
+                <RadialGradient startX="-4" startY="-4" endX="11.0" endY="-4.0" name="tail2Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
         <Shape x="370" y="340" name="tail1" id="0:85">
             <Ellipse width="30" height="30" originX="0.5" originY="0.5" name="tail1Path"/>
             <Fill name="tail1Fill">
-                <SolidColor colorValue="FF8E9A3B" name="tail1Color"/>
+                <RadialGradient startX="-5" startY="-5" endX="12.0" endY="-5.0" name="tail1Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
             </Fill>
         </Shape>
 

@@ -620,6 +620,33 @@ class Brain {
     this.pokeCount = 0;
     this.lastPokeAt = -1;
 
+    // 4e. Autonomous mood cycling (Phase 6: studio production).
+    // Shiku cycles through moods every 8-15s without manual input.
+    // Weighted random: idle=30%, curious=20%, excited=15%, confused=10%,
+    // startled=8%, sleepy=5%, orbit=4%, comet=3%, burst=2%, disco=2%, rocket=0.5%, hypno=0.5%.
+    this._moodTimer = 5 + Math.random() * 7;  // first mood change in 5-12s
+    this._moodWeights = [
+      { state: 'idle',     w: 30 },
+      { state: 'curious',  w: 20 },
+      { state: 'excited',  w: 15 },
+      { state: 'confused', w: 10 },
+      { state: 'startled', w: 8 },
+      { state: 'sleepy',   w: 5 },
+      { state: 'orbit',    w: 4 },
+      { state: 'comet',    w: 3 },
+      { state: 'burst',    w: 2 },
+      { state: 'disco',    w: 2 },
+      { state: 'rocket',   w: 0.5 },
+      { state: 'hypno',    w: 0.5 },
+    ];
+
+    // 4f. Touch/click interaction state (Phase 6: mobile clicks).
+    // tap=poke, double-tap=excited, long-press=pet, swipe=random funky.
+    this._pointerDownAt = 0;
+    this._pointerDownPos = null;
+    this._lastTapAt = 0;
+    this._pointerMoveDist = 0;
+
     // 8. Particles.
     this.particles = [];
     this.particleRng = mulberry32(0x5EED);
@@ -633,6 +660,8 @@ class Brain {
     // Bind handlers (so removeEventListener works).
     this.tick = this.tick.bind(this);
     this.onPointerMove = this.onPointerMove.bind(this);
+    this.onPointerDown = this.onPointerDown.bind(this);
+    this.onPointerUp = this.onPointerUp.bind(this);
     this.onPointerLeave = this.onPointerLeave.bind(this);
     this.onVisibilityChange = this.onVisibilityChange.bind(this);
 
@@ -732,6 +761,9 @@ class Brain {
   renderBackground() {
     if (!this.backgroundCanvas) return;
     const ctx = this.backgroundCanvas.getContext('2d');
+    // Phase 6: 4K-quality rendering — canvas is 1024×1024, scale context 2x
+    // so all 512-based coordinates map to 1024 internal pixels for crisp edges.
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
     ctx.clearRect(0, 0, 512, 512);
 
     // 1. State-reactive background tint. Subtle hue shift based on state.
@@ -796,6 +828,8 @@ class Brain {
   // Highlight: top-left, light + low alpha. Shadow: bottom-right, dark + low alpha.
   render3DShading() {
     if (!this.particlesCanvas) return;
+    // Note: the context transform (2x scale for 4K) is already set by
+    // renderParticles() which calls this method. All coordinates are 512-based.
     const ctx = this.particlesCanvas.getContext('2d');
     const s = this.shapes;
     if (!s.head || !s.body) return;
@@ -850,19 +884,96 @@ class Brain {
 
   start() {
     window.addEventListener('pointermove', this.onPointerMove, { passive: true });
+    window.addEventListener('pointerdown', this.onPointerDown, { passive: true });
+    window.addEventListener('pointerup', this.onPointerUp, { passive: true });
     document.addEventListener('pointerleave', this.onPointerLeave);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     // Phase 5: spawn ambient dust for atmospheric perspective (background layer).
     this.spawnAmbientDust();
     this.raf = requestAnimationFrame(this.tick);
-    console.log('[brain] started. window.shiku = { go, poke, pet }');
+    console.log('[brain] started. window.shiku = { go, poke, pet, orbit, comet, burst, dance, spin, hypnotize, surprise }');
   }
 
   stop() {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerdown', this.onPointerDown);
+    window.removeEventListener('pointerup', this.onPointerUp);
     document.removeEventListener('pointerleave', this.onPointerLeave);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+  }
+
+  // ── Phase 6: autonomous mood cycling ──────────────────────────────
+  // Every 8-15s, Shiku picks a new mood via weighted random.
+  // The current mood persists until the timer expires OR a touch
+  // interaction overrides it.
+  computeMood(dt) {
+    this._moodTimer -= dt;
+    if (this._moodTimer <= 0) {
+      // Reset timer: 8-15s
+      this._moodTimer = 8 + Math.random() * 7;
+      // Weighted random state selection
+      const totalW = this._moodWeights.reduce((s, m) => s + m.w, 0);
+      let r = Math.random() * totalW;
+      let chosen = 'idle';
+      for (const m of this._moodWeights) {
+        r -= m.w;
+        if (r <= 0) { chosen = m.state; break; }
+      }
+      // Don't repeat the same state (pick again if same)
+      if (chosen === this.state) {
+        const alts = this._moodWeights.filter(m => m.state !== this.state);
+        const altTotal = alts.reduce((s, m) => s + m.w, 0);
+        let r2 = Math.random() * altTotal;
+        for (const m of alts) {
+          r2 -= m.w;
+          if (r2 <= 0) { chosen = m.state; break; }
+        }
+      }
+      console.log(`[shiku] mood cycle: ${this.state} → ${chosen}`);
+      this.go(chosen);
+    }
+  }
+
+  // ── Phase 6: touch/click interactions ──────────────────────────────
+  // tap = poke, double-tap = excited, long-press (>500ms) = pet,
+  // swipe (>50px move) = random funky state.
+
+  onPointerDown(e) {
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+      this._pointerDownAt = this.clock;
+      this._pointerDownPos = { x: e.clientX, y: e.clientY };
+      this._pointerMoveDist = 0;
+    }
+  }
+
+  onPointerUp(e) {
+    if (!this._pointerDownPos) return;
+    const dt = this.clock - this._pointerDownAt;
+    const dx = e.clientX - this._pointerDownPos.x;
+    const dy = e.clientY - this._pointerDownPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    this._pointerDownPos = null;
+
+    // Swipe (>50px move): random funky state
+    if (dist > 50) {
+      this.surprise();
+      return;
+    }
+    // Long press (>500ms): pet
+    if (dt > 0.5) {
+      this.pet();
+      return;
+    }
+    // Double-tap (<300ms since last tap): excited
+    if (this.clock - this._lastTapAt < 0.3) {
+      this.go('excited');
+      this._lastTapAt = 0;
+      return;
+    }
+    // Single tap: poke (3 pokes → dizzy)
+    this._lastTapAt = this.clock;
+    this.poke();
   }
 
   // ── pointer perception (per bloub) ────────────────────────────────
@@ -1050,6 +1161,10 @@ class Brain {
     // 0. Ambient motion (Phase 5: gaze drift when idle + breathing + cursor trail).
     //    Runs FIRST so the perception layer can blend ambient drift with pointer.
     this.computeAmbientMotion(dt);
+
+    // 0b. Phase 6: autonomous mood cycling — every 8-15s, Shiku picks a
+    //     new mood via weighted random. Touch/click interactions can override.
+    this.computeMood(dt);
 
     // 1. Compute per-frame perception (ease-outs, layered ω).
     this.computePerception(dt);
@@ -1498,6 +1613,8 @@ class Brain {
 
   renderParticles() {
     const ctx = this.particlesCanvas.getContext('2d');
+    // Phase 6: 4K-quality rendering — canvas is 1024×1024, scale context 2x
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
     ctx.clearRect(0, 0, 512, 512);
 
     // ── Phase 5: 3D shading overlay (drawn FIRST, behind everything else
