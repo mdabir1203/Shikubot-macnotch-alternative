@@ -51,10 +51,7 @@ async function init() {
   //    option fetches via XHR + sometimes hits CORS/encoding issues; `buffer`
   //    is the reliable path — proven in basic-test.html).
   const bytes = await fetch('./shikubot.riv').then(r => r.arrayBuffer());
-  console.log('[shikubot] fetched .riv bytes:', bytes.byteLength, 'bytes (expect 2588)');
-  if (bytes.byteLength !== 2588) {
-    console.warn(`[shikubot] UNEXPECTED BYTE LENGTH: got ${bytes.byteLength}, expected 2588`);
-  }
+  console.log('[shikubot] fetched .riv bytes:', bytes.byteLength, 'bytes');
 
   // 2. Create the basic Rive instance. The basic package handles:
   //    - loading shikubot.riv (from buffer)

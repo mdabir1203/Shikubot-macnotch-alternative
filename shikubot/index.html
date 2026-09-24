@@ -24,21 +24,96 @@
     }
     #rive-canvas, #particles-canvas {
       position: absolute;
-      width: min(80vmin, 512px);
-      height: min(80vmin, 512px);
-      top: 50%; left: 50%;
+      width: min(70vmin, 512px);
+      height: min(70vmin, 512px);
+      top: 38%; left: 50%;
       transform: translate(-50%, -50%);
     }
     #rive-canvas { z-index: 1; }
     #particles-canvas { z-index: 2; pointer-events: none; }
-    .hint {
-      position: fixed; bottom: 12px; left: 50%;
+
+    /* Control panel — fixed at the bottom, scrollable if overflow */
+    .panel {
+      position: fixed;
+      bottom: 12px; left: 50%;
       transform: translateX(-50%);
-      font-size: 11px; opacity: 0.5;
+      max-width: 96vw;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      padding: 8px 10px;
+      background: rgba(28, 28, 28, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      z-index: 4;
+    }
+    .panel button {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 5px 9px;
+      background: rgba(50, 50, 50, 0.6);
+      color: #E8E8E8;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
+      font-family: inherit;
+    }
+    .panel button:hover {
+      background: rgba(80, 80, 80, 0.9);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .panel button:active {
+      transform: translateY(1px);
+    }
+    .panel button.active {
+      background: rgba(217, 91, 43, 0.7);  /* Shiku orange */
+      border-color: rgba(240, 138, 63, 0.9);
+    }
+    /* Funky buttons — slightly distinct color */
+    .panel button.funk {
+      background: rgba(60, 40, 80, 0.6);
+      border-color: rgba(170, 130, 220, 0.3);
+    }
+    .panel button.funk:hover {
+      background: rgba(90, 60, 120, 0.9);
+      border-color: rgba(190, 150, 240, 0.6);
+    }
+    .panel button.funk.active {
+      background: rgba(180, 80, 220, 0.7);
+      border-color: rgba(220, 160, 250, 0.9);
+    }
+    .panel .group { display: contents; }
+    .panel .divider {
+      width: 1px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 0 2px;
+    }
+    .hint {
+      position: fixed; top: 12px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px; opacity: 0.45;
       letter-spacing: 0.04em;
       pointer-events: none;
       z-index: 3;
     }
+    /* State badge — top-left corner shows current state */
+    .state-badge {
+      position: fixed;
+      top: 12px; left: 12px;
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      padding: 4px 8px;
+      background: rgba(217, 91, 43, 0.25);
+      border: 1px solid rgba(240, 138, 63, 0.4);
+      border-radius: 4px;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .state-badge .label { opacity: 0.6; }
+    .state-badge .value { color: #F08A3F; }
   </style>
 </head>
 <body>
@@ -46,12 +121,98 @@
     <canvas id="rive-canvas" width="512" height="512"></canvas>
     <canvas id="particles-canvas" width="512" height="512"></canvas>
   </main>
-  <p class="hint">move the mouse · click to poke · type shiku.go('startled') in console</p>
+  <p class="hint">move the mouse · click the buttons below · or open the console for `shiku.*`</p>
+  <div class="state-badge"><span class="label">state:</span> <span class="value" id="state-value">—</span></div>
+
+  <div class="panel" id="panel">
+    <!-- v1 states -->
+    <button data-state="idle">idle</button>
+    <button data-state="curious">curious</button>
+    <button data-state="excited">excited</button>
+    <button data-state="startled">startled</button>
+    <button data-state="sleepy">sleepy</button>
+    <button data-state="confused">confused</button>
+    <div class="divider"></div>
+    <!-- actions -->
+    <button data-action="poke">poke</button>
+    <button data-action="pet">pet</button>
+    <div class="divider"></div>
+    <!-- funky extended states -->
+    <button class="funk" data-state="orbit">orbit</button>
+    <button class="funk" data-state="comet">comet</button>
+    <button class="funk" data-state="burst">burst</button>
+    <button class="funk" data-state="disco">disco</button>
+    <button class="funk" data-state="rocket">rocket</button>
+    <button class="funk" data-state="hypno">hypno</button>
+    <div class="divider"></div>
+    <button class="funk" data-action="surprise">🎲 surprise</button>
+  </div>
+
   <!-- Load the basic Rive package as a UMD script (not ESM import) —
        the basic package's wasm loader is hardcoded to fetch from a CDN
        when loaded via ESM, but the UMD script path uses local files
        correctly. Exposes window.rive namespace. -->
   <script src="./rive-basic.js"></script>
   <script type="module" src="/src/main.js"></script>
+  <script>
+    // Wire up control panel buttons once main.js has loaded shiku.
+    function wireButtons() {
+      if (!window.shiku) {
+        setTimeout(wireButtons, 100);
+        return;
+      }
+      const panel = document.getElementById('panel');
+      const stateValue = document.getElementById('state-value');
+
+      panel.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const state = btn.dataset.state;
+        const action = btn.dataset.action;
+        if (state) {
+          window.shiku.go(state);
+        } else if (action === 'poke') {
+          window.shiku.poke();
+        } else if (action === 'pet') {
+          window.shiku.pet();
+        } else if (action === 'surprise') {
+          window.shiku.surprise();
+        }
+      });
+
+      // Update active button + state badge on a 100ms interval
+      // (cheap — just textContent updates, no layout thrash)
+      const allButtons = panel.querySelectorAll('button[data-state]');
+      function refresh() {
+        const state = window.shiku.state;
+        stateValue.textContent = state;
+        allButtons.forEach(b => {
+          b.classList.toggle('active', b.dataset.state === state);
+        });
+      }
+      refresh();
+      setInterval(refresh, 100);
+    }
+    wireButtons();
+
+    // Keyboard shortcuts (1-9 = states, P = poke, T = pet, R = surprise)
+    document.addEventListener('keydown', (e) => {
+      if (!window.shiku) return;
+      // Don't fire when user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const keyMap = {
+        '1': 'idle', '2': 'curious', '3': 'excited',
+        '4': 'startled', '5': 'sleepy', '6': 'confused',
+        '7': 'orbit', '8': 'comet', '9': 'burst',
+        '0': 'disco',
+      };
+      if (keyMap[e.key]) window.shiku.go(keyMap[e.key]);
+      else if (e.key === 'p' || e.key === 'P') window.shiku.poke();
+      else if (e.key === 't' || e.key === 'T') window.shiku.pet();
+      else if (e.key === 'r' || e.key === 'R') window.shiku.surprise();
+      else if (e.key === 'h' || e.key === 'H') window.shiku.hypnotize();
+      else if (e.key === ' ') { e.preventDefault(); window.shiku.spin(); }
+    });
+  </script>
 </body>
 </html>

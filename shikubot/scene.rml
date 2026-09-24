@@ -204,9 +204,40 @@
             <StateMachineTrigger name="goStartled" id="0:116"/>
             <StateMachineTrigger name="goSleepy" id="0:117"/>
             <StateMachineTrigger name="goConfused" id="0:118"/>
+            <!-- FUNKY EXTENDED TRIGGERS (Phase 4) -->
+            <StateMachineTrigger name="goOrbit" id="0:400"/>
+            <StateMachineTrigger name="goComet" id="0:401"/>
+            <StateMachineTrigger name="goBurst" id="0:402"/>
+            <StateMachineTrigger name="goDisco" id="0:403"/>
+            <StateMachineTrigger name="goRocket" id="0:404"/>
+            <StateMachineTrigger name="goHypno" id="0:405"/>
 
             <StateMachineLayer name="StateSequencing" id="0:120">
-                <AnyState x="0" y="-120"/>
+                <!-- AnyState: transitions here fire from ANY state. Used for
+                     the 6 funky extended triggers (goOrbit, goComet, etc.) so
+                     we don't have to add 36 transitions to the 6 original
+                     states. State-specific transitions (e.g. goStartled)
+                     still take priority over AnyState transitions. -->
+                <AnyState x="0" y="-120">
+                    <StateTransition stateToId="0:410">
+                        <TransitionTriggerCondition inputId="0:400"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:411">
+                        <TransitionTriggerCondition inputId="0:401"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:412">
+                        <TransitionTriggerCondition inputId="0:402"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:413">
+                        <TransitionTriggerCondition inputId="0:403"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:414">
+                        <TransitionTriggerCondition inputId="0:404"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:415">
+                        <TransitionTriggerCondition inputId="0:405"/>
+                    </StateTransition>
+                </AnyState>
                 <ExitState x="800" y="-120"/>
                 <EntryState>
                     <StateTransition stateToId="0:130"/>
@@ -322,6 +353,49 @@
                         <TransitionTriggerCondition inputId="0:117"/>
                     </StateTransition>
                 </AnimationState>
+
+                <!-- ============================================================
+                     FUNKY EXTENDED STATES (Phase 4) — crazy interactions.
+                     Each has its own animation timeline + auto-exit rules.
+                     Reached via AnyState transitions triggered by goOrbit,
+                     goComet, goBurst, goDisco, goRocket, goHypno.
+                     ============================================================ -->
+
+                <!-- orbit: 3.4s loop. 6 depth-sorted orbit rings, eyes whip
+                     around the sphere at 1.25 turns/s. Per bloub's orbit state. -->
+                <AnimationState animationId="0:420" id="0:410" x="160" y="320"/>
+
+                <!-- comet: 2.4s loop. Body collapses to a dot, 4 ribbons
+                     orbit at 210°/s around the stationary dot. -->
+                <AnimationState animationId="0:421" id="0:411" x="320" y="320"/>
+
+                <!-- burst: 2.6s oneShot. Body collapses to 0.166 then regrows,
+                     5 particles spiral inward (behind body, occluded).
+                     Auto-exits to curious. -->
+                <AnimationState animationId="0:422" id="0:412" x="480" y="320">
+                    <StateTransition stateToId="0:131"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                </AnimationState>
+
+                <!-- disco: 4s loop. Body hue-cycles, glasses flash rainbow,
+                     sparkle storm. -->
+                <AnimationState animationId="0:423" id="0:413" x="640" y="320"/>
+
+                <!-- rocket: 3s oneShot. Shiku shoots upward with flame trail,
+                     then falls back. Auto-exits to idle. -->
+                <AnimationState animationId="0:424" id="0:414" x="640" y="160">
+                    <StateTransition stateToId="0:130"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                </AnimationState>
+
+                <!-- hypno: 5s loop. Eyes become swirling spirals, glasses spin. -->
+                <AnimationState animationId="0:425" id="0:415" x="640" y="0"/>
             </StateMachineLayer>
         </StateMachine>
 
@@ -342,5 +416,13 @@
         <LinearAnimation loopValue="oneShot" duration="72" name="anim_startled" id="0:203"/>
         <LinearAnimation loopValue="loop" duration="600" name="anim_sleepy" id="0:204"/>
         <LinearAnimation loopValue="loop" duration="180" name="anim_confused" id="0:205"/>
+
+        <!-- FUNKY EXTENDED ANIMATIONS (Phase 4) -->
+        <LinearAnimation loopValue="loop" duration="204" name="anim_orbit" id="0:420"/>
+        <LinearAnimation loopValue="loop" duration="144" name="anim_comet" id="0:421"/>
+        <LinearAnimation loopValue="oneShot" duration="156" name="anim_burst" id="0:422"/>
+        <LinearAnimation loopValue="loop" duration="240" name="anim_disco" id="0:423"/>
+        <LinearAnimation loopValue="oneShot" duration="180" name="anim_rocket" id="0:424"/>
+        <LinearAnimation loopValue="loop" duration="300" name="anim_hypno" id="0:425"/>
     </Artboard>
 </Rive>

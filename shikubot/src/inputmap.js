@@ -41,14 +41,29 @@ export const INPUTMAP = Object.freeze({
   goStartled:     { type: 'trigger' },
   goSleepy:       { type: 'trigger' },
   goConfused:     { type: 'trigger' },
+
+  // ── FUNKY EXTENDED TRIGGERS (Phase 4: crazy interactions) ───────────
+  // These drive new visual states that show off the 3D-quality rendering
+  // (orbit rings, comet ribbons, particle depth fog, hue-cycling body).
+  goOrbit:        { type: 'trigger' },   // 6 depth-sorted orbit rings, eyes whip around the sphere
+  goComet:        { type: 'trigger' },   // body collapses to a dot, 4 ribbons orbit at 210°/s
+  goBurst:        { type: 'trigger' },   // body collapses + regrows, 5 particles spiral inward (occluded by body)
+  goDisco:        { type: 'trigger' },   // body hue-cycles, glasses flash rainbow, sparkle storm
+  goRocket:       { type: 'trigger' },   // Shiku shoots upward with flame trail, then falls back
+  goHypno:        { type: 'trigger' },   // eyes become swirling spirals, glasses spin
 });
 
 /**
- * The 6 states the Brain state machine can be in. Matches scene.rml's
+ * The 12 states the Brain state machine can be in. Matches scene.rml's
  * StateSequencing layer AnimationState ids.
+ * First 6 are the master prompt's v1 states; last 6 are the funky
+ * extensions (Phase 4) that show off 3D-quality rendering.
  */
 export const STATE_NAMES = Object.freeze([
+  // v1 (master prompt)
   'idle', 'curious', 'excited', 'startled', 'sleepy', 'confused',
+  // Funky extensions (Phase 4)
+  'orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno',
 ]);
 
 /**

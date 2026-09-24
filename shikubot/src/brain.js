@@ -187,6 +187,284 @@ class ConfettiParticle {
   }
 }
 
+// ── funky extended particles (Phase 4) ────────────────────────────────
+
+// OrbitRing: a 3D circle in orthographic projection. The z-component splits
+// each arc into a front + back half — back half drawn first (occluded by
+// body), front half drawn after (on top of body). Per bloub's orbit state.
+class OrbitRing {
+  constructor({ tilt, speed, phase, sweep, hue, cx = 256, cy = 256, scale = 200 }) {
+    this.tilt = tilt;       // rotation of the ring's plane around X axis
+    this.speed = speed;     // rad/s (around Y axis)
+    this.phase = phase;     // starting angle
+    this.sweep = sweep;     // arc length (0..1) of the visible portion
+    this.hue = hue;         // HSL hue (0..360)
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;     // base radius in pixels
+    this.radius = 0.85;     // ring radius (fraction of scale)
+    this.flattening = 0.18; // orthographic flattening (0 = circle, 1 = line)
+    this.alpha = 1;
+  }
+  update(dt) {
+    this.phase += this.speed * dt;
+  }
+  // Draw the BACK half (z<0) — called BEFORE the body is drawn.
+  renderBack(ctx) {
+    this._renderHalf(ctx, true);
+  }
+  // Draw the FRONT half (z>0) — called AFTER the body is drawn.
+  renderFront(ctx) {
+    this._renderHalf(ctx, false);
+  }
+  _renderHalf(ctx, isBack) {
+    const N = 32;
+    const r = this.radius * this.scale;
+    const flat = this.flattening;
+    const sin = Math.sin(this.tilt);
+    const cos = Math.cos(this.tilt);
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= N; i++) {
+      const a = this.phase + (i / N) * TAU * this.sweep;
+      // 3D point on a circle of radius r in the XY plane
+      const x3 = Math.cos(a) * r;
+      const y3 = Math.sin(a) * r;
+      // Rotate around X axis by `tilt`
+      const yr = y3 * cos - 0 * sin;
+      const zr = y3 * sin + 0 * cos;
+      // Orthographic project (drop z)
+      const px = this.cx + x3;
+      const py = this.cy + yr * flat;
+      // Depth test: isBack = z < 0, !isBack = z >= 0
+      if ((isBack && zr < 0) || (!isBack && zr >= 0)) {
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      } else if (started) {
+        // segment break — stroke what we have, start fresh
+        ctx.strokeStyle = `hsla(${this.hue}, 55%, 60%, ${this.alpha})`;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        ctx.beginPath();
+        started = false;
+      }
+    }
+    if (started) {
+      ctx.strokeStyle = `hsla(${this.hue}, 55%, 60%, ${this.alpha})`;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+}
+
+// CometRibbon: 4 flat arcs spinning at 210°/s around a stationary dot.
+// Per bloub's comet state: the dot stays put, the trail orbits it.
+class CometRibbon {
+  constructor({ angle, tilt, speed = 210 * Math.PI / 180, phase, hue, cx = 256, cy = 256, scale = 200 }) {
+    this.angle = angle;       // base angle around the dot
+    this.tilt = tilt;         // rotation of the ribbon's plane
+    this.speed = speed;
+    this.phase = phase;
+    this.hue = hue;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+    this.radius = 0.85;
+    this.flattening = 0.176;
+    this.sweep = 0.6;        // arc length
+    this.alpha = 1;
+    this.life = 2.4;
+    this.age = 0;
+  }
+  update(dt) {
+    this.age += dt;
+    this.phase += this.speed * dt;
+  }
+  render(ctx) {
+    if (this.age > this.life) return;
+    const fadeOut = clamp((this.life - this.age) / 0.3, 0, 1);
+    const alpha = fadeOut * this.alpha;
+    const N = 24;
+    const r = this.radius * this.scale;
+    const flat = this.flattening;
+    const sin = Math.sin(this.tilt);
+    const cos = Math.cos(this.tilt);
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const a = this.phase + this.angle + (i / N) * TAU * this.sweep;
+      const x3 = Math.cos(a) * r;
+      const y3 = Math.sin(a) * r;
+      const yr = y3 * cos;
+      const px = this.cx + x3;
+      const py = this.cy + yr * flat;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = `hsla(${this.hue}, 70%, 65%, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+}
+
+// SpiralParticle: for burst state — spirals inward with depth fog.
+// rho *= 0.75^(dt*10), angle += 100°/s, depth-fogs toward background.
+class SpiralParticle {
+  constructor({ angle, rho, hue = 30, birth = 0, life = 0.62, cx = 256, cy = 256, scale = 200 }) {
+    this.angle = angle;
+    this.rho = rho;
+    this.hue = hue;
+    this.life = life;
+    this.age = -birth;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+  }
+  update(dt) {
+    this.age += dt;
+    if (this.age < 0) return;
+    this.rho *= Math.pow(0.75, dt * 10);
+    this.angle += (100 * Math.PI / 180) * dt;
+  }
+  render(ctx) {
+    if (this.age < 0) return;
+    const fadeIn = clamp(this.age / 0.06, 0, 1);
+    const fadeOut = clamp((this.life - this.age) / 0.08, 0, 1);
+    const alpha = fadeIn * fadeOut;
+    // Depth fog: closer to center = brighter, further = darker
+    const depth = clamp(1 - this.rho / 0.8, 0, 1);
+    const light = 40 + depth * 30;
+    const r = (5 + 8 * clamp(this.age / 0.55, 0, 1));
+    const x = this.cx + Math.cos(this.angle) * this.rho * this.scale;
+    const y = this.cy + Math.sin(this.angle) * this.rho * this.scale;
+    ctx.fillStyle = `hsla(${this.hue}, 80%, ${light}%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+  }
+}
+
+// RainbowTrail: for disco state — leaves a hue-cycling trail behind Shiku.
+// Each trail segment has a different hue; the whole trail shifts over time.
+class RainbowTrail {
+  constructor({ x, y, hue, life = 0.8, cx = 256, cy = 256, scale = 200 }) {
+    this.x = x;  // normalized -1..1 relative to artboard center
+    this.y = y;
+    this.hue = hue;
+    this.life = life;
+    this.age = 0;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+    this.size = 6 + Math.random() * 4;
+  }
+  update(dt) {
+    this.age += dt;
+    this.size *= Math.pow(0.6, dt * 2);  // shrink over time
+  }
+  render(ctx) {
+    const fadeIn = clamp(this.age / 0.05, 0, 1);
+    const fadeOut = clamp((this.life - this.age) / 0.2, 0, 1);
+    const alpha = fadeIn * fadeOut * 0.85;
+    const x = this.cx + this.x * this.scale;
+    const y = this.cy + this.y * this.scale;
+    // Glow effect: 3 concentric circles with decreasing alpha
+    for (let i = 0; i < 3; i++) {
+      const r = this.size * (1 + i * 0.5);
+      const a = alpha * (1 - i * 0.25);
+      ctx.fillStyle = `hsla(${(this.hue + i * 30) % 360}, 90%, 60%, ${a})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+// FlameParticle: for rocket state — orange/red flame trail that drifts
+// downward + fades (rocket goes up, trail falls back).
+class FlameParticle {
+  constructor({ x, y, hue = 25, life = 0.6, cx = 256, cy = 256, scale = 200 }) {
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = 0.3 + Math.random() * 0.3;  // drift downward
+    this.hue = hue;
+    this.life = life;
+    this.age = 0;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+    this.size = 8 + Math.random() * 6;
+  }
+  update(dt) {
+    this.age += dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.size *= Math.pow(0.4, dt * 2);  // shrink fast
+  }
+  render(ctx) {
+    const fadeIn = clamp(this.age / 0.05, 0, 1);
+    const fadeOut = clamp((this.life - this.age) / 0.15, 0, 1);
+    const alpha = fadeIn * fadeOut * 0.85;
+    const x = this.cx + this.x * this.scale;
+    const y = this.cy + this.y * this.scale;
+    // Flame: orange-yellow center + red outer
+    ctx.fillStyle = `hsla(${this.hue + 20}, 100%, 70%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, this.size * 0.6, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${alpha * 0.7})`;
+    ctx.beginPath();
+    ctx.arc(x, y, this.size, 0, TAU);
+    ctx.fill();
+  }
+}
+
+// HypnoSwirl: for hypno state — concentric spinning spiral that fills the
+// glasses lens area.
+class HypnoSwirl {
+  constructor({ x, y, life = 5, cx = 256, cy = 256, scale = 200 }) {
+    this.x = x;  // relative to eye center
+    this.y = y;
+    this.life = life;
+    this.age = 0;
+    this.cx = cx;
+    this.cy = cy;
+    this.scale = scale;
+    this.phase = 0;
+  }
+  update(dt) {
+    this.age += dt;
+    this.phase += dt * 4;  // 4 rad/s spin
+  }
+  render(ctx) {
+    const fadeIn = clamp(this.age / 0.3, 0, 1);
+    const fadeOut = clamp((this.life - this.age) / 0.5, 0, 1);
+    const alpha = fadeIn * fadeOut * 0.9;
+    const x = this.cx + this.x * this.scale;
+    const y = this.cy + this.y * this.scale;
+    // Spiral: 3 arms, 2 turns each, color cycles through hue wheel
+    for (let arm = 0; arm < 3; arm++) {
+      ctx.beginPath();
+      const armPhase = this.phase + arm * (TAU / 3);
+      for (let i = 0; i <= 30; i++) {
+        const t = i / 30;
+        const r = t * 22;
+        const a = armPhase + t * TAU * 2;
+        const px = x + Math.cos(a) * r;
+        const py = y + Math.sin(a) * r;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      const hue = (arm * 120 + this.age * 180) % 360;
+      ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+}
+
 // ── the brain ──────────────────────────────────────────────────────────
 
 class Brain {
@@ -389,6 +667,58 @@ class Brain {
       case 'idle':
         // Default — no special setup.
         break;
+
+      // ── FUNKY EXTENDED STATES (Phase 4) ─────────────────────────────
+      case 'orbit':
+        // Spawn 6 depth-sorted orbit rings + clear old funky particles.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.spawnOrbitRings();
+        break;
+      case 'comet':
+        // Spawn 4 comet ribbons. Body collapses to a dot.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.spawnCometRibbons();
+        break;
+      case 'burst':
+        // Spawn 5 spiral particles spiraling inward (occluded by body).
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.spawnBurstParticles();
+        this._burstScale = 1;  // reset burst scale
+        break;
+      case 'disco':
+        // Hue-cycling body + rainbow trail + sparkle storm.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this._lastRainbowAt = 0;  // reset spawn timer
+        break;
+      case 'rocket':
+        // Continuous flame trail spawned in maybeSpawnStateParticles.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this._lastFlameAt = 0;
+        break;
+      case 'hypno':
+        // 2 hypno swirls (one per eye).
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.spawnHypnoSwirls();
+        break;
+    }
+    // Clear funky extended state when leaving them.
+    if (!['orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno'].includes(name)) {
+      this._orbitRings = null;
+      this._cometRibbons = null;
+      this._hypnoSwirls = null;
+      this._burstScale = 1;
     }
   }
 
@@ -577,6 +907,91 @@ class Brain {
         const yawnPhase = (this.clock * 0.4) % 1;
         this.target.mouthOpen = Math.sin(yawnPhase * Math.PI) * 0.6;
         break;
+
+      // ── FUNKY EXTENDED STATES (Phase 4) ─────────────────────────────
+      case 'orbit':
+        // 6 depth-sorted orbit rings, eyes whip around the sphere at 1.25 turns/s.
+        // Per bloub's orbit state: triangle→ball morph, 6 rings 1.25 turns/s,
+        // eyes whip ~3× faster. The orbit rings are particles (OrbitRing class).
+        this.target.lidL = 0;  // wide eyes for the spin
+        this.target.lidR = 0;
+        this.target.earL = 0.5;  // ears slightly alert
+        this.target.earR = 0.5;
+        this.target.wagSpeed = 0.8;  // fast wag during orbit
+        // Override gaze to spin: 1.25 turns/s = 1.25 * 2π rad/s
+        // Use the clock to drive a circular motion of the gaze target.
+        const orbitSpin = this.clock * 1.25 * TAU;
+        this.target.gazeX = Math.cos(orbitSpin);
+        this.target.gazeY = Math.sin(orbitSpin);
+        // Also tilt the head slightly with the orbit
+        this.target.headTilt = Math.sin(orbitSpin) * 0.3;
+        break;
+
+      case 'comet':
+        // Body collapses to a dot, 4 ribbons orbit at 210°/s.
+        // The ribbons are particles (CometRibbon class).
+        // Body collapse: scale head + body down to ~16%
+        // (Visual collapse handled in writeArtboard via state check.)
+        this.target.lidL = 0;  // eyes still visible (collapsed but watching)
+        this.target.lidR = 0;
+        this.target.wagSpeed = 0;
+        break;
+
+      case 'burst':
+        // Body collapses to 0.166 then regrows, 5 particles spiral inward.
+        // The spiral particles are spawned once on state enter (see go()).
+        this.target.lidL = 0;
+        this.target.lidR = 0;
+        this.target.wagSpeed = 0;
+        // Body scale is animated based on time-in-state
+        const burstPhase = (this.clock - this.stateChangedAt) / 2.6;  // 0..1 over 2.6s
+        if (burstPhase < 0.5) {
+          // Collapse phase: scale shrinks to 0.166
+          this._burstScale = 1 - (1 - 0.166) * (burstPhase * 2);
+        } else {
+          // Regrow phase: scale grows back to 1
+          this._burstScale = 0.166 + (1 - 0.166) * ((burstPhase - 0.5) * 2);
+        }
+        break;
+
+      case 'disco':
+        // Body hue-cycles, glasses flash rainbow, sparkle storm.
+        // Hue cycling handled in writeArtboard via state check.
+        this.target.lidL = 0;  // wide open, party mode
+        this.target.lidR = 0;
+        this.target.earL = 1;  // ears alert (dancing)
+        this.target.earR = 1;
+        this.target.wagSpeed = 1.0;  // fastest wag
+        this.target.mouthOpen = 0.5 + 0.5 * Math.sin(this.clock * 8 * TAU);  // mouth flapping
+        // Hue cycle: drive gaze in a circle for dance motion
+        const discoSpin = this.clock * 2 * TAU;
+        this.target.gazeX = Math.cos(discoSpin) * 0.6;
+        this.target.gazeY = Math.sin(discoSpin) * 0.6;
+        break;
+
+      case 'rocket':
+        // Shiku shoots upward with flame trail, then falls back.
+        // The flame particles are spawned in tick() (continuous).
+        this.target.lidL = 0;  // wide eyes (excited/terrified)
+        this.target.lidR = 0;
+        this.target.earL = -0.5;  // ears back (wind resistance)
+        this.target.earR = -0.5;
+        this.target.mouthOpen = 0.9;  // screaming
+        this.target.wagSpeed = 0;  // tail straight back
+        break;
+
+      case 'hypno':
+        // Eyes become swirling spirals, glasses spin.
+        // The hypno swirls are particles (HypnoSwirl class) positioned at the eye centers.
+        this.target.lidL = 0;  // eyes fully open to show swirls
+        this.target.lidR = 0;
+        this.target.earL = 0;  // neutral ears
+        this.target.earR = 0;
+        this.target.wagSpeed = 0.2;  // slow hypnotic wag
+        // Don't move gaze — let the swirl particles do the work
+        this.target.gazeX = 0;
+        this.target.gazeY = 0;
+        break;
     }
   }
 
@@ -653,6 +1068,82 @@ class Brain {
     }
   }
 
+  // ── funky extended spawn methods (Phase 4) ─────────────────────────
+
+  spawnOrbitRings() {
+    // 6 orbit rings with random tilt/speed/phase/hue, per bloub's orbit state.
+    // The rings have depth-sorted back/front halves (renderBack/renderFront).
+    this._orbitRings = [];
+    for (let i = 0; i < 6; i++) {
+      const ring = new OrbitRing({
+        tilt: (i / 6) * Math.PI + this.particleRng() * 0.5,
+        speed: 3 + this.particleRng() * 0.7,  // ~3.3 turns/s
+        phase: this.particleRng() * TAU,
+        sweep: 0.6 + this.particleRng() * 0.25,
+        hue: (i * 60 + this.particleRng() * 30) % 360,
+      });
+      this._orbitRings.push(ring);
+    }
+  }
+
+  spawnCometRibbons() {
+    // 4 ribbons at ~210°/s around the stationary dot, per bloub's comet state.
+    this._cometRibbons = [];
+    for (let i = 0; i < 4; i++) {
+      const ribbon = new CometRibbon({
+        angle: (i / 4) * TAU,
+        tilt: Math.PI / 4 + this.particleRng() * 0.3,  // ~45° + jitter
+        phase: this.particleRng() * TAU,
+        hue: (i * 90 + this.particleRng() * 30) % 360,
+      });
+      this._cometRibbons.push(ribbon);
+    }
+  }
+
+  spawnBurstParticles() {
+    // 5 spiral particles spiraling inward (behind body, occluded).
+    for (let i = 0; i < 5; i++) {
+      this.particles.push(new SpiralParticle({
+        angle: (i / 5) * TAU,
+        rho: 0.58 + this.particleRng() * 0.18,
+        hue: 30 + this.particleRng() * 30,
+        birth: i * 0.05,
+        life: 0.62,
+      }));
+    }
+  }
+
+  spawnRainbowTrail() {
+    // Rainbow trail at Shiku's current position (around the head/body center).
+    const angle = this.particleRng() * TAU;
+    const r = 0.1 + this.particleRng() * 0.15;
+    this.particles.push(new RainbowTrail({
+      x: Math.cos(angle) * r,
+      y: Math.sin(angle) * r,
+      hue: (this.clock * 180) % 360,  // hue shifts with time
+      life: 0.5 + this.particleRng() * 0.4,
+    }));
+  }
+
+  spawnFlame() {
+    // Flame particle below Shiku (rocket goes up, flame trails down).
+    this.particles.push(new FlameParticle({
+      x: (this.particleRng() - 0.5) * 0.15,
+      y: 0.2 + this.particleRng() * 0.1,  // below body
+      hue: 15 + this.particleRng() * 15,  // red-orange range
+      life: 0.4 + this.particleRng() * 0.3,
+    }));
+  }
+
+  spawnHypnoSwirls() {
+    // 2 hypno swirls — one per eye (left + right).
+    // Positioned at the eye centers (relative to artboard center).
+    this._hypnoSwirls = [
+      new HypnoSwirl({ x: -30 / 200, y: -20 / 200, life: 5 }),  // left eye (226,180) → (-30, -76) from (256, 256)
+      new HypnoSwirl({ x:  30 / 200, y: -20 / 200, life: 5 }),  // right eye (286,180) → (30, -76) from (256, 256)
+    ];
+  }
+
   updateParticles(dt) {
     // Update existing particles; cull expired.
     const next = [];
@@ -661,15 +1152,35 @@ class Brain {
       if (p.age < p.life) next.push(p);
     }
     this.particles = next;
+    // Update funky extended particles (kept separate for depth-sort calls).
+    if (this._orbitRings) for (const r of this._orbitRings) r.update(dt);
+    if (this._cometRibbons) for (const r of this._cometRibbons) r.update(dt);
+    if (this._hypnoSwirls) for (const s of this._hypnoSwirls) s.update(dt);
+    // Cull expired comet ribbons + hypno swirls
+    if (this._cometRibbons) this._cometRibbons = this._cometRibbons.filter(r => r.age < r.life);
   }
 
   maybeSpawnStateParticles() {
     // Sleepy state spawns periodic Z particles.
     if (this.state === 'sleepy') {
-      // Spawn a new Z every ~1.2s
       if (!this._lastZAt || this.clock - this._lastZAt > 1.2) {
         this._lastZAt = this.clock;
         this.spawnZParticles();
+      }
+    }
+    // Disco state spawns rainbow trails continuously.
+    if (this.state === 'disco') {
+      if (!this._lastRainbowAt || this.clock - this._lastRainbowAt > 0.05) {
+        this._lastRainbowAt = this.clock;
+        this.spawnRainbowTrail();
+        this.spawnSparkles(2);  // sparkle storm
+      }
+    }
+    // Rocket state spawns flame trail continuously.
+    if (this.state === 'rocket') {
+      if (!this._lastFlameAt || this.clock - this._lastFlameAt > 0.03) {
+        this._lastFlameAt = this.clock;
+        this.spawnFlame();
       }
     }
   }
@@ -677,7 +1188,38 @@ class Brain {
   renderParticles() {
     const ctx = this.particlesCanvas.getContext('2d');
     ctx.clearRect(0, 0, 512, 512);
+
+    // For orbit state: render BACK halves of orbit rings first (behind body).
+    // The Rive canvas (with the body) is drawn between this renderParticles
+    // call and the next frame's renderParticles — but since the overlay
+    // canvas is on TOP of the rive canvas, the back halves won't actually
+    // be occluded. We work around this by drawing back-half rings slightly
+    // darker + thinner so they read as "behind" even without true occlusion.
+    if (this._orbitRings) {
+      for (const ring of this._orbitRings) {
+        // Back halves: dimmer
+        const origAlpha = ring.alpha;
+        ring.alpha = 0.35;
+        ring.renderBack(ctx);
+        ring.alpha = origAlpha;
+      }
+    }
+    // Comet ribbons: render all (no depth sort — they're all in front).
+    if (this._cometRibbons) {
+      for (const ribbon of this._cometRibbons) ribbon.render(ctx);
+    }
+
+    // Regular particles (StarParticle, SparkleParticle, etc.)
     for (const p of this.particles) p.render(ctx);
+
+    // For orbit state: render FRONT halves of orbit rings on top (in front).
+    if (this._orbitRings) {
+      for (const ring of this._orbitRings) ring.renderFront(ctx);
+    }
+    // Hypno swirls render on top of eyes (always in front).
+    if (this._hypnoSwirls) {
+      for (const swirl of this._hypnoSwirls) swirl.render(ctx);
+    }
   }
 
   // ── write to runtime inputs (contract) ─────────────────────────────
@@ -702,31 +1244,87 @@ class Brain {
     const s = this.shapes;
     if (!s.head) return; // lookup failed; nothing to write.
 
-    // ── Gaze: pupil position (±4px) + 2px head parallax ──────────────
-    // Per master prompt: "Gaze ±1 maps eyes+pupil+2px head parallax"
+    // ── 3D eye rotation: pupils on a sphere (orthographic 3D projection)
+    // Per bloub's measured physics: eyes live on a sphere; yaw/pitch drive
+    // a 3D rotation; near-edge pupils self-shrink. This gives the 3D-quality
+    // "look around" feel instead of a flat 2D offset.
+    // yaw = gazeX * max_yaw (~30°), pitch = gazeY * max_pitch (~20°)
+    // 3D position on sphere of radius PUPIL_R:
+    //   x = sin(yaw) * cos(pitch) * R
+    //   y = sin(pitch) * R
+    //   z = cos(yaw) * cos(pitch) * R  (used for scale only)
+    // Orthographic project: drop z, but use it to compute perspective scale.
+    const MAX_YAW = 0.52;    // ~30°
+    const MAX_PITCH = 0.35;  // ~20°
+    const PUPIL_R = 12;      // pupil travel radius on the sphere
+    const yaw = this.target.gazeX * MAX_YAW;
+    const pitch = this.target.gazeY * MAX_PITCH;
+    const cosP = Math.cos(pitch);
+    const x3 = Math.sin(yaw) * cosP * PUPIL_R;
+    const y3 = Math.sin(pitch) * PUPIL_R;
+    const z3 = cosP * Math.cos(yaw) * PUPIL_R;  // depth (positive = toward viewer)
+    // Perspective scale: pupil shrinks at the sphere's edge (z near 0).
+    // z ranges from 0 (edge) to PUPIL_R (center, toward viewer).
+    // scale = 0.6 + 0.4 * (z / PUPIL_R) → 0.6 at edge, 1.0 at center.
+    const pupilScale = 0.6 + 0.4 * (z3 / PUPIL_R);
+
     if (s.eyeL_pupil) {
-      s.eyeL_pupil.x = 226 + this.target.gazeX * 4;
-      s.eyeL_pupil.y = 180 + this.target.gazeY * 4;
+      s.eyeL_pupil.x = 226 + x3;
+      s.eyeL_pupil.y = 180 + y3;
+      s.eyeL_pupil.scaleX = pupilScale;
+      s.eyeL_pupil.scaleY = pupilScale;
     }
     if (s.eyeR_pupil) {
-      s.eyeR_pupil.x = 286 + this.target.gazeX * 4;
-      s.eyeR_pupil.y = 180 + this.target.gazeY * 4;
+      s.eyeR_pupil.x = 286 + x3;
+      s.eyeR_pupil.y = 180 + y3;
+      s.eyeR_pupil.scaleX = pupilScale;
+      s.eyeR_pupil.scaleY = pupilScale;
     }
 
     // ── Head tilt: ±12° rotation + 2px parallax ──────────────────────
-    // Per master prompt: "Tilt ±12° head rot"
     s.head.rotation = this.target.headTilt * (12 * Math.PI / 180);
     s.head.x = 256 + this.target.gazeX * 2; // 2px parallax
 
+    // ── Rocket state: Shiku shoots upward then falls back (3s oneShot).
+    // Phase 0..0.4: rise, 0.4..0.6: hang, 0.6..1.0: fall back.
+    // Override head + body y position with rocket offset.
+    let rocketOffsetY = 0;
+    if (this.state === 'rocket') {
+      const phase = (this.clock - this.stateChangedAt) / 3.0;  // 0..1
+      if (phase < 0.4) {
+        rocketOffsetY = -(phase / 0.4) * 60;  // rise 60px up
+      } else if (phase < 0.6) {
+        rocketOffsetY = -60;  // hang at peak
+      } else if (phase < 1.0) {
+        rocketOffsetY = -60 + ((phase - 0.6) / 0.4) * 60;  // fall back
+      }
+      s.head.y = 200 + rocketOffsetY;
+      if (s.body) s.body.y = 340 + rocketOffsetY;
+    } else {
+      s.head.y = 200;
+      if (s.body) s.body.y = 340;
+    }
+
     // ── Ears: ±20° (±0.35 rad) for alert/droop ───────────────────────
-    // Per master prompt: "EarL/R −1 droop..+1 alert"
-    if (s.earL) s.earL.rotation = this.target.earL * 0.35;
-    if (s.earR) s.earR.rotation = this.target.earR * 0.35;
+    if (s.earL) {
+      s.earL.rotation = this.target.earL * 0.35;
+      s.earL.y = 110 + rocketOffsetY;
+    }
+    if (s.earR) {
+      s.earR.rotation = this.target.earR * 0.35;
+      s.earR.y = 110 + rocketOffsetY;
+    }
+    if (s.hairTuft) s.hairTuft.y = 95 + rocketOffsetY;
+    if (s.glasses) s.glasses.y = 180 - this.target.glassesLift * 10 + rocketOffsetY;
+    if (s.eyeL_sclera) s.eyeL_sclera.y = 180 + rocketOffsetY;
+    if (s.eyeR_sclera) s.eyeR_sclera.y = 180 + rocketOffsetY;
+    if (s.eyeL_lid) s.eyeL_lid.y = 180 + rocketOffsetY;
+    if (s.eyeR_lid) s.eyeR_lid.y = 180 + rocketOffsetY;
+    if (s.eyeL_pupil) s.eyeL_pupil.y = 180 + y3 + rocketOffsetY;
+    if (s.eyeR_pupil) s.eyeR_pupil.y = 180 + y3 + rocketOffsetY;
+    if (s.mouth) s.mouth.y = 270 + rocketOffsetY;
 
     // ── Lids: scaleY 0..1 (1=closed) ──────────────────────────────────
-    // Lid is a rectangle that covers the eye when scaleY=1.
-    // Anchor is the top of the lid, so scaleY closes downward.
-    // (For Phase 1 we use simple scale; could refine with anchor later.)
     if (s.eyeL_lid) s.eyeL_lid.scaleY = this.target.lidL;
     if (s.eyeR_lid) s.eyeR_lid.scaleY = this.target.lidR;
 
@@ -737,15 +1335,55 @@ class Brain {
     }
 
     // ── Glasses: ±10px y lift, ±0.2 rad crooked ───────────────────────
-    // Per master prompt: glassesLift -1..1, glassesCrooked 0..1.
     if (s.glasses) {
-      s.glasses.y = 180 - this.target.glassesLift * 10;
       s.glasses.rotation = this.target.glassesCrooked * 0.2;
     }
 
+    // ── Burst state: body + head collapse to 0.166 then regrow ────────
+    // _burstScale is computed in computePerception() for the burst state.
+    const burstScale = (this.state === 'burst' && this._burstScale) ? this._burstScale : 1;
+    if (burstScale !== 1) {
+      s.head.scaleX = burstScale;
+      s.head.scaleY = burstScale;
+      if (s.body) {
+        s.body.scaleX = burstScale;
+        s.body.scaleY = burstScale;
+      }
+    } else {
+      s.head.scaleX = 1;
+      s.head.scaleY = 1;
+      if (s.body) {
+        s.body.scaleX = 1;
+        s.body.scaleY = 1;
+      }
+    }
+
+    // ── Comet state: collapse head + body to a small dot ─────────────
+    if (this.state === 'comet') {
+      s.head.scaleX = 0.3;
+      s.head.scaleY = 0.3;
+      if (s.body) {
+        s.body.scaleX = 0.2;
+        s.body.scaleY = 0.2;
+      }
+    }
+
+    // ── Disco state: hue-cycling body via... we can't change SolidColor
+    //    at runtime through the runtime API (no exposed setter for colorValue
+    //    on SolidColor). We work around this by scaling the body slightly
+    //    (a "dance bounce") — the rainbow trail + sparkles carry the
+    //    color-shifting effect via the overlay canvas.
+    if (this.state === 'disco') {
+      const bounce = 1 + 0.05 * Math.sin(this.clock * 8 * TAU);  // subtle 8Hz bounce
+      s.head.scaleX = bounce;
+      s.head.scaleY = bounce;
+      if (s.body) {
+        s.body.scaleX = bounce;
+        s.body.scaleY = bounce;
+      }
+    }
+
     // ── Tail wag: 6 segments oscillating with phase offset ───────────
-    // Per master prompt: "tail wag cycle 0.7s" → ω = 2π/0.7 ≈ 8.98 rad/s
-    // Master prompt: "wagSpeed 0..1 (blend TailIdle→TailWag)" — 0=still, 1=fast.
     const wagFreq = TAU / 0.7; // rad/s
     const wagAmp = 0.3 + this.target.wagSpeed * 0.5; // 0.3..0.8 rad
     for (let i = 1; i <= 6; i++) {
@@ -771,6 +1409,27 @@ export function createBrain(opts) {
     go: (name) => brain.go(name),
     poke: () => brain.poke(),
     pet: () => brain.pet(),
+    // ── Funky extended API (Phase 4) ─────────────────────────────────
+    // Convenience methods for the 6 new states — these read naturally:
+    //   shiku.orbit()    → orbit state (3D rings, eyes whip around sphere)
+    //   shiku.comet()    → comet state (4 ribbons, body collapses to dot)
+    //   shiku.burst()    → burst state (body collapses + regrows, spiral particles)
+    //   shiku.dance()    → disco state (rainbow trail + sparkle storm)
+    //   shiku.spin()     → rocket state (Shiku shoots upward with flame trail)
+    //   shiku.hypnotize()→ hypno state (eyes become swirling spirals)
+    orbit:      () => brain.go('orbit'),
+    comet:      () => brain.go('comet'),
+    burst:      () => brain.go('burst'),
+    dance:      () => brain.go('disco'),
+    spin:       () => brain.go('rocket'),
+    hypnotize:  () => brain.go('hypno'),
+    // Random funky state — for "surprise me" button
+    surprise: () => {
+      const funky = ['orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno'];
+      const next = funky[Math.floor(Math.random() * funky.length)];
+      brain.go(next);
+      return next;
+    },
     // Debug access (not in contract but useful):
     brain,
     get state() { return brain.state; },

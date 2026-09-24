@@ -651,3 +651,127 @@ Stage Summary:
      prompt's "One rAF loop in the brain; Rive runs its own." — this
      matches the master prompt's intent (brain rAF + Rive rAF) but with
      a 1-frame max latency between brain writes and rendering.
+
+---
+Task ID: phase-4
+Agent: main
+Task: Phase 4 — Add 6 crazy funky interactions (orbit, comet, burst, disco, rocket, hypno) + 3D-quality rendering (pupils on a sphere, depth-sorted orbit rings, particle depth fog) + control panel UI
+
+Work Log:
+- Extended src/inputmap.js: added 6 new triggers (goOrbit, goComet, goBurst,
+  goDisco, goRocket, goHypno) + 6 new states in STATE_NAMES. Contract now
+  has 25 inputs total (12 numbers + 13 triggers).
+- Extended scene.rml: added 6 new StateMachineTrigger inputs (0:400-0:405),
+  6 new AnimationStates (0:410-0:415), 6 new LinearAnimations (0:420-0:425).
+  Used AnyState for the 6 new transitions (simpler than adding 36 transitions
+  to the 6 original states — state-specific transitions still take priority
+  over AnyState, so the "any→startled highest priority" pattern holds).
+  Burst (0:422) + rocket (0:424) are oneShot with auto-exit transitions to
+  curious/idle when their animations complete. Total: 12 AnimationStates +
+  12 LinearAnimations + 13 triggers + 36 StateTransitions.
+- Rebuilt .riv: 2892 bytes (was 2588, +304 for the new states/triggers).
+  Compiles cleanly: 0 errors, 0 warnings, 0 problems. 210 objects total
+  (was 178, +32 for the new states/triggers/animations).
+- Extended src/brain.js with 6 new particle classes:
+  * OrbitRing: 3D circle in orthographic projection. z-component splits
+    each arc into front + back halves — back half drawn first (dimmer,
+    reads as "behind"), front half drawn after (on top). Per bloub's
+    orbit state pattern. 6 instances with random tilt/speed/phase/hue.
+  * CometRibbon: 4 flat arcs spinning at 210°/s around a stationary dot.
+    Per bloub's comet state: "the dot stays put, the trail orbits it".
+  * SpiralParticle: for burst state — spirals inward (rho *= 0.75^(dt*10),
+    angle += 100°/s) with depth fog (lightens based on rho, closer to
+    center = brighter).
+  * RainbowTrail: for disco state — hue-cycling trail with 3 concentric
+    glow circles (decreasing alpha). Hue shifts with time.
+  * FlameParticle: for rocket state — orange/red flame that drifts downward
+    + shrinks fast (rocket goes up, flame trails back).
+  * HypnoSwirl: for hypno state — 3-arm spiral with 2 turns each, color
+    cycles through hue wheel. Positioned at the eye centers.
+- Added 3D-quality rendering per bloub's measured physics:
+  * PUPILS ON A SPHERE: gazeX/gazeY drive a 3D rotation (yaw ±30°, pitch
+    ±20°). Pupil position computed as:
+      x = sin(yaw) * cos(pitch) * R
+      y = sin(pitch) * R
+      z = cos(yaw) * cos(pitch) * R  (depth)
+    Orthographic project (drop z), but use z for perspective scale:
+      scale = 0.6 + 0.4 * (z / R)  → 0.6 at sphere edge, 1.0 at center
+    Pupils shrink near the sphere's edge — gives the "look around" 3D feel
+    instead of flat 2D offset.
+  * ORBIT RINGS DEPTH SORT: OrbitRing has renderBack/renderFront methods.
+    Back halves drawn first with dimmer alpha (0.35) so they read as
+    "behind" the body even without true occlusion (overlay canvas is on
+    top of rive canvas, so true occlusion isn't possible without a body-
+    colored occluder rectangle).
+  * PARTICLE DEPTH FOG: SpiralParticle lightens based on rho (closer to
+    center = brighter). mixHex-style fade toward background.
+- Added 6 new state-specific perception overrides in computePerception():
+  * orbit: gaze spins in a circle (1.25 turns/s), headTilt oscillates,
+    ears slightly alert, fast wag
+  * comet: eyes still visible (collapsed but watching), tail still
+  * burst: body scale animated (1 → 0.166 → 1 over 2.6s)
+  * disco: gaze in a circle (2 turns/s), ears fully alert, fastest wag,
+    mouth flaps at 8Hz, body bounces at 8Hz
+  * rocket: eyes wide (screaming), ears back (wind resistance), mouth
+    fully open, tail straight back
+  * hypno: eyes fully open (to show swirls), neutral ears, slow hypnotic wag
+- Added state-specific shape overrides in writeArtboard():
+  * rocket: head + body + all features offset by rocketOffsetY (rises 60px
+    up over 0.4×3s, hangs for 0.2×3s, falls back over 0.4×3s)
+  * burst: head + body scale = _burstScale (1 → 0.166 → 1)
+  * comet: head scale = 0.3, body scale = 0.2 (collapse to a dot)
+  * disco: head + body bounce at 8Hz (1 ± 0.05) — rainbow trail + sparkles
+    carry the color-shifting effect via overlay canvas
+- Added 6 new public API methods on window.shiku:
+  * shiku.orbit()      → orbit state (3D rings, eyes whip around sphere)
+  * shiku.comet()      → comet state (4 ribbons, body collapses to dot)
+  * shiku.burst()      → burst state (body collapses + regrows, spirals)
+  * shiku.dance()      → disco state (rainbow trail + sparkle storm)
+  * shiku.spin()       → rocket state (Shiku shoots upward with flame trail)
+  * shiku.hypnotize()  → hypno state (eyes become swirling spirals)
+  * shiku.surprise()   → random funky state (for "🎲 surprise" button)
+- Added control panel UI in index.html:
+  * 12 state buttons (6 v1 + 6 funky) with active highlighting
+  * poke + pet + surprise action buttons
+  * State badge in top-left showing current state (updates 10×/s)
+  * Keyboard shortcuts: 1-6 = v1 states, 7-9/0 = funky states,
+    P = poke, T = pet, R = surprise, H = hypnotize, Space = spin
+  * Funky buttons styled differently (purple tint) to distinguish from v1
+- Verified all 6 funky states work via agent-browser + VLM:
+  * orbit: "multiple colored rings (purple, pink, red, orange, yellow,
+    green, blue) appearing as an elliptical orbit" ✓
+  * comet: "distinct, glowing elliptical ring (orbital trail) encircling
+    the middle of the character's body... gradient of colors, including
+    cyan, pink, and purple" ✓
+  * burst: "body appears smaller than usual (collapsed)" ✓
+  * disco: "cluster of glowing, translucent rainbow bubbles + tiny white
+    sparkles scattered around the face" ✓
+  * rocket: "positioned higher than the vertical center... orange flame-
+    like particles visible on the fox's lower body" ✓
+  * hypno: "colorful spiral patterns... concentric rainbow-colored swirls
+    (red, blue, green)... hypnotic, target-like appearance" ✓
+- Verified control panel: clicking "orbit" button → state changes to orbit ✓
+- Verified keyboard shortcuts: pressing '8' → state changes to comet ✓
+- Production build: dist/ = 1.4MB total (index.html 7.6KB + assets/index-
+  [hash].js 25KB + rive-basic.js 224KB + rive.wasm 1.2MB + shikubot.riv 2.9KB).
+  Copied to /home/z/my-project/download/shikubot/ for user-facing delivery.
+
+Stage Summary:
+- 6 new crazy funky interactions added (orbit/comet/burst/disco/rocket/hypno)
+  with dedicated particle classes for each (OrbitRing, CometRibbon,
+  SpiralParticle, RainbowTrail, FlameParticle, HypnoSwirl).
+- 3D-quality rendering achieved per bloub's measured physics:
+  * Pupils on a sphere with perspective scale (shrink at edges)
+  * Depth-sorted orbit rings (back halves dimmer)
+  * Particle depth fog (spiral particles brighten toward center)
+- Control panel UI with 12 state buttons + 3 action buttons + keyboard
+  shortcuts + live state badge.
+- .riv: 2892 bytes, 210 objects (12 AnimationStates + 12 LinearAnimations +
+  13 triggers + 12 numbers + 36 StateTransitions + 19 shapes).
+- All 6 funky states verified working via VLM (each shows distinct visual
+  effects: rings, ribbons, spirals, flames, rainbow trails, sparkles).
+- All v1 acceptance tests still pass (mouse sweep layering, go('startled')
+  glasses wobble, poke×3 → dizzy, inputmap validation).
+- Total LOC: brain.js ~1450 lines (was ~430), inputmap.js ~120 lines,
+  scene.rml ~428 lines (was ~347), main.js ~150 lines, index.html ~150
+  lines (was ~50).
