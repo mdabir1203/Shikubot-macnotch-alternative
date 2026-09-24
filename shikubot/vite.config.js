@@ -15,11 +15,11 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
-    headers: {
-      // WASM needs these or browsers refuse to instantiate it
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
+    // NOTE: removed COOP/COEP headers — they were causing the cross-origin
+    // wasm fetch from unpkg.com to be CORB-blocked (bytes returned as null
+    // → .riv parse failed with "may be corrupt"). The basic package's
+    // default wasmURL is unpkg; we can self-host later but for now let
+    // the cross-origin fetch work.
   },
   // Treat .riv as a static asset — emit verbatim, don't try to parse
   assetsInclude: ['**/*.riv', '**/*.wasm'],

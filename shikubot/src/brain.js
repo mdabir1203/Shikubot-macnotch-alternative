@@ -199,13 +199,14 @@ class Brain {
    * @param {Object} opts.artboard - artboard instance from `file.defaultArtboard()`
    * @param {Object} opts.stateMachineInstance - StateMachineInstance from `new rive.StateMachineInstance(sm, artboard)`
    */
-  constructor({ riveCanvas, particlesCanvas, rive, file, artboard, stateMachineInstance: sm }) {
+  constructor({ riveCanvas, particlesCanvas, rive, file, artboard, stateMachineInstance: sm, externalAdvance = true }) {
     this.riveCanvas = riveCanvas;
     this.particlesCanvas = particlesCanvas;
     this.rive = rive;
     this.file = file;
     this.artboard = artboard;
     this.sm = sm;
+    this.externalAdvance = externalAdvance;
 
     // 1. Validate the runtime exposes all 19 contract inputs (throws on mismatch).
     this.inputs = validateInputs(sm, rive.SMIInput);
@@ -425,10 +426,14 @@ class Brain {
   // ── main loop (single rAF, bounded dt per bloub) ──────────────────
 
   tick(ms) {
-    this.raf = requestAnimationFrame(this.tick);
+    // Note: main.js owns the rAF loop and calls brain.tick(ms) each frame.
+    // When used with the basic @rive-app/canvas package (autoplay:true),
+    // the basic package owns SM/artboard advancement + canvas rendering;
+    // the brain only does perception + springs + particles + writes.
+    // The `externalAdvance` flag (default true) controls whether the brain
+    // calls sm.advance/artboard.advance itself.
+
     // Bounded dt: an inactive tab doesn't jump forward on refocus.
-    // (rAF is suspended while hidden, but the first frame after refocus
-    // would otherwise have a huge dt.)
     const dt = this.lastFrame ? Math.min((ms - this.lastFrame) / 1000, 0.064) : 0;
     this.lastFrame = ms;
     this.clock += dt;
@@ -443,18 +448,16 @@ class Brain {
     this.updateParticles(dt);
     this.maybeSpawnStateParticles();
 
-    // 4. Advance Rive state machine + artboard.
-    //    The SM plays the current state's animation; the artboard applies
-    //    any animation keyframes. Our per-frame writes (in writeArtboard)
-    //    happen AFTER this and override for the current frame.
-    this.sm.advance(dt);
-    this.artboard.advance(dt);
+    // 4. Advance Rive SM + artboard (ONLY if no external renderer is doing it).
+    if (!this.externalAdvance) {
+      this.sm.advance(dt);
+      this.artboard.advance(dt);
+    }
 
     // 5. Write per-frame values to StateMachineNumber inputs (for the contract).
     this.writeInputs();
 
     // 6. Write per-frame values directly to artboard shapes (for visual).
-    //    These override any state animation keyframes for the same properties.
     this.writeArtboard();
 
     // 7. Render particle overlay.

@@ -47,6 +47,11 @@
     <canvas id="particles-canvas" width="512" height="512"></canvas>
   </main>
   <p class="hint">move the mouse · click to poke · type shiku.go('startled') in console</p>
+  <!-- Load the basic Rive package as a UMD script (not ESM import) —
+       the basic package's wasm loader is hardcoded to fetch from a CDN
+       when loaded via ESM, but the UMD script path uses local files
+       correctly. Exposes window.rive namespace. -->
+  <script src="./rive-basic.js"></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

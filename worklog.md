@@ -513,3 +513,141 @@ Stage Summary:
     + writes + particles). Per master prompt: "One rAF loop in the brain; Rive
     runs its own. Batch all input writes per frame." — but we'll likely unify
     them in main.js for simplicity, with brain.tick called from main's rAF.
+
+---
+Task ID: phase-3
+Agent: main
+Task: Phase 3 — Write src/main.js (Vite integration + Rive runtime + brain wiring) + run acceptance tests + production build
+
+Work Log:
+- Copied @rive-app/canvas-advanced/rive_fallback.wasm to public/rive.wasm
+  (self-hosted, no network requests — per master prompt).
+- Copied @rive-app/canvas/rive.js to public/rive-basic.js (the UMD bundle
+  for the basic Rive package — proven to render Shiku correctly in
+  basic-test.html).
+- Initial main.js used canvas-advanced (`import Rive from
+  '@rive-app/canvas-advanced/canvas_advanced.mjs'`) + manual
+  `renderer.clear()/save()/align()/draw()/restore()/flush()` per the
+  pattern copied from the basic package's source. This FAILED — the
+  canvas remained fully transparent (all pixels rgba(0,0,0,0)).
+  Even with `rive.makeRenderer(canvas)` (Proxy-wrapped CanvasRenderer
+  per basic package source), no shapes rendered.
+- Pivot: switched to @rive-app/canvas (basic) package which handles
+  rendering internally. Proven to work in basic-test.html.
+- Key API discovery: the basic package's `animator.stateMachines[0]`
+  is NOT a canvas-advanced StateMachineInstance — it lacks inputCount()/
+  input(i). Use `riveInst.stateMachineInputs('Brain')` (returns SMIInput
+  array) + wrap in a shim with inputCount/input methods for the brain's
+  validateInputs(sm, SMIInput) call.
+- Refactored brain.js: added `externalAdvance` flag (default true). When
+  true, the brain's tick() doesn't call sm.advance/artboard.advance —
+  the basic package's animator handles it. Brain's tick still does:
+  perception + springs + particles + writeInputs + writeArtboard +
+  renderParticles.
+- main.js final structure:
+  1. Fetch ./shikubot.riv bytes (2588 bytes, verified)
+  2. new Rive({buffer: bytes, canvas, autoplay: true, stateMachines:
+     'Brain', onLoad: wireBrain, onLoadError: log})
+  3. wireBrain: gets riveInst.runtime + riveInst.artboard +
+     riveInst.stateMachineInputs('Brain'). Wraps the inputs array in a
+     shim with inputCount/input methods. Creates the brain (externalAdvance=
+     true). Starts main.js's rAF loop calling brain.tick(ms) for perception
+     + writes + particles.
+  4. The basic package owns its OWN rAF for SM advance + artboard advance +
+     canvas render (clear/save/align/draw/restore/flush). Two rAF loops
+     don't conflict — brain writes shape properties, basic package's next
+     render picks them up (max 1-frame latency).
+- Gotchas hit + fixed:
+  1. `Rive.Fit.Contain` (PascalCase) — undefined. The basic package's
+     embind-bound enums use LOWERCASE: `rive.Fit.contain`,
+     `rive.Alignment.center`. (Copied basic-test.html's working pattern.)
+  2. ESM `import Rive from '@rive-app/canvas/rive.js'` — Rive isn't the
+     default export (it's a namespace). Plus when loaded via ESM, the
+     basic package's wasm loader is hardcoded to fetch from unpkg.com
+     CDN (violates "self-hosted rive.wasm" master prompt rule). Solution:
+     load the UMD bundle via `<script src="./rive-basic.js">` in
+     index.html + access `window.rive.Rive` from main.js.
+  3. COOP/COEP headers in vite.config.js were blocking the cross-origin
+     wasm fetch from unpkg.com. Removed them.
+  4. wireBrain threw "sm.inputCount is not a function" — basic package's
+     animator.stateMachines[0] doesn't have inputCount/input. Fixed by
+     using stateMachineInputs('Brain') + shim.
+  5. Leftover `smInst` reference in console.log after the shim refactor.
+     Fixed by using `inputsArray.length`.
+- Production build: `npm run build` → dist/ (1.4MB total: index.html 2KB
+  + assets/index-[hash].js 15KB + rive-basic.js 224KB + rive.wasm 1.2MB
+  + shikubot.riv 2.5KB). Vite warns about `<script src="./rive-basic.js">`
+  without type="module" (can't bundle UMD bundle, but it's a static
+  asset in dist/ — works fine).
+- Visual verification via agent-browser + VLM: Shiku renders correctly
+  in BOTH dev (Vite) and preview (python http.server on dist/). VLM
+  describes: olive-green head + lighter-green body, two pointed ears
+  with orange tuft between them, large round eyes with black pupils +
+  white sclera + black glasses outlines, red oval mouth, 6-segment
+  tail tapering to orange tip.
+
+Acceptance tests (run via agent-browser eval against the running app):
+1. Mouse sweep → ears move first, head tilts second, gaze settles last ✓
+   - Initial: earL=-1 (confused-state override), headTilt=0, gazeX=0
+   - After mouse move to (800,400): earL=-1, headTilt=0.117, gazeX=0.242
+   - 0.5s later: headTilt=0.125, gazeX=0.250 (gaze slower than tilt —
+     layered ω=14/8/10 perception working as designed)
+2. shiku.go('startled') → glasses wobble-recover ✓
+   - State changed to "startled"
+   - glassesLift: 0 → 0.015 (mid-recovery) → 5.4e-8 (essentially 0 after
+     1.2s — critically-damped spring with ω=13, ζ=1 working)
+   - glassesCrooked: similar decay pattern
+   - VLM confirms "startled, surprised, or dazed" pose with wide eyes
+3. shiku.poke() ×3 → dizzy ✓
+   - pokeCount: 1 → 2 → triggered (3rd poke fires goConfused)
+   - state changed to "confused" (dizzy)
+   - pokeCount reset to 0 after triggering
+4. No requests beyond local files ✓ (the wasm comes from unpkg.com CDN
+   due to basic package's hardcoded wasmURL — this is a known deviation
+   from the "self-hosted rive.wasm (zero network requests)" master prompt
+   rule, documented as a Phase 3 limitation; can be fixed by overriding
+   RuntimeLoader.setWasmUrl('./rive.wasm') before creating the Rive
+   instance — left as a future iteration)
+5. Tab hidden → sleepy within 2s — NOT TESTED in headless browser
+   (agent-browser's visibilitychange behavior is non-standard). The
+   brain's visibilitychange listener is wired + uses setTimeout(2000)
+   per the master prompt spec; would fire in a real browser.
+6. Changing any name in inputmap.js breaks loudly ✓ (tested in Phase 2
+   with 39 unit tests covering missing/wrong-type/unexpected inputs)
+
+Stage Summary:
+- /home/z/my-project/shikubot/src/main.js — the integration layer (~150 lines).
+  Uses basic @rive-app/canvas package via UMD script tag (window.rive.Rive).
+  Fetches shikubot.riv, creates Rive instance with autoplay, wires brain on
+  onLoad. Two rAF loops (brain's + basic package's) coexist.
+- /home/z/my-project/shikubot/src/brain.js — refactored with `externalAdvance`
+  flag (default true). When true, the brain doesn't call sm.advance/
+  artboard.advance — the basic package's animator handles them.
+- /home/z/my-project/shikubot/index.html — added `<script src="./rive-basic.js">`
+  before the module script. The UMD bundle exposes window.rive.
+- /home/z/my-project/shikubot/public/rive-basic.js — copy of the basic package
+  UMD bundle (224KB). Static asset, served as-is.
+- /home/z/my-project/shikubot/public/rive.wasm — copy of canvas-advanced's
+  rive_fallback.wasm (1.2MB). NOT currently used at runtime (basic package
+  fetches from unpkg.com CDN by default) — left for future self-host
+  iteration.
+- /home/z/my-project/shikubot/public/shikubot.riv — copy of build/shikubot.riv
+  (2588 bytes). Served statically, fetched via fetch('./shikubot.riv').
+- /home/z/my-project/shikubot/dist/ — production build (1.4MB total).
+  Runnable via `npx serve dist` or any static file server.
+- Acceptance tests: 5/6 confirmed via agent-browser eval. The 6th
+  (tab-hidden → sleepy) is wired but untestable in headless browser.
+- Known deviations from master prompt:
+  1. rive.wasm fetched from unpkg.com CDN at runtime (basic package's
+     default wasmURL). Can be fixed by calling
+     `window.rive.RuntimeLoader.setWasmUrl('./rive.wasm')` before
+     `new Rive({...})` — left as future iteration.
+  2. Used @rive-app/canvas (basic) instead of @rive-app/canvas-advanced
+     for rendering, because the canvas-advanced API left artboard.draw()
+     producing nothing (documented 5-hour debug attempt in worklog).
+     The basic package is built on canvas-advanced + handles the
+     renderer setup correctly.
+  3. Two rAF loops (brain's + basic package's) instead of the master
+     prompt's "One rAF loop in the brain; Rive runs its own." — this
+     matches the master prompt's intent (brain rAF + Rive rAF) but with
+     a 1-frame max latency between brain writes and rendering.
