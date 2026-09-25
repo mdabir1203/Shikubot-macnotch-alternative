@@ -614,7 +614,7 @@ class Brain {
     this.state = 'idle';
     this.stateChangedAt = 0;
     this.lastBlinkAt = 0;
-    this.blinkInterval = 3.0; // seconds between blinks
+    this.blinkInterval = 6.0; // LOGO MODE: blink every 6s (calmer, less distracting)
 
     // 7. Poke counter (for dizzy acceptance test).
     this.pokeCount = 0;
@@ -624,7 +624,7 @@ class Brain {
     // Shiku cycles through moods every 8-15s without manual input.
     // Weighted random: idle=30%, curious=20%, excited=15%, confused=10%,
     // startled=8%, sleepy=5%, orbit=4%, comet=3%, burst=2%, disco=2%, rocket=0.5%, hypno=0.5%.
-    this._moodTimer = 5 + Math.random() * 7;  // first mood change in 5-12s
+    this._moodTimer = Infinity;  // LOGO MODE: no autonomous cycling — logo is calm + consistent
     this._moodWeights = [
       { state: 'idle',     w: 30 },
       { state: 'curious',  w: 20 },
@@ -755,17 +755,18 @@ class Brain {
     // Gaze drift: 3 layered sines at different frequencies for organic feel.
     // Output clamped to ±0.5 (subtler than pointer-driven gaze).
     const t = this.clock;
-    const driftX = Math.sin(t * 0.31) * 0.25
-                 + Math.sin(t * 0.73 + 1.2) * 0.15
-                 + Math.sin(t * 0.13 + 2.5) * 0.10;
-    const driftY = Math.sin(t * 0.27 + 0.5) * 0.20
-                 + Math.sin(t * 0.61 + 3.1) * 0.12
-                 + Math.sin(t * 0.11 + 1.7) * 0.08;
-    this.ambientGaze.x = clamp(driftX, -0.5, 0.5);
-    this.ambientGaze.y = clamp(driftY, -0.5, 0.5);
+    // LOGO MODE: slower, subtler drift (0.15-0.4 freq range — calmer than demo)
+    const driftX = Math.sin(t * 0.15) * 0.20
+                 + Math.sin(t * 0.37 + 1.2) * 0.10
+                 + Math.sin(t * 0.09 + 2.5) * 0.08;
+    const driftY = Math.sin(t * 0.13 + 0.5) * 0.15
+                 + Math.sin(t * 0.31 + 3.1) * 0.08
+                 + Math.sin(t * 0.07 + 1.7) * 0.05;
+    this.ambientGaze.x = clamp(driftX, -0.35, 0.35);  // clamped tighter for subtlety
+    this.ambientGaze.y = clamp(driftY, -0.35, 0.35);
 
     // Breathing phase advances at 0.3Hz (3.33s period — calm, relaxed breathing)
-    this.breathPhase += dt * 0.3;
+    this.breathPhase += dt * 0.2;  // LOGO MODE: 0.2Hz (5s period — calmer breathing)
 
     // Cursor trail: push current pointer position every 30ms (if pointer exists)
     if (this.pointer) {
@@ -806,28 +807,17 @@ class Brain {
     ctx.setTransform(2, 0, 0, 2, 0, 0);
     ctx.clearRect(0, 0, 512, 512);
 
-    // 1. State-reactive background tint. Subtle hue shift based on state.
-    // Default is dark gray #1D1D1D; we overlay translucent color.
-    // Phase 5: boosted alpha for visibility (was 0.15-0.30, now 0.30-0.50).
-    const stateTints = {
-      idle:     { hue: 200, sat: 30, light: 18, alpha: 0.30 },
-      curious:  { hue: 50,  sat: 50, light: 25, alpha: 0.30 },
-      excited:  { hue: 30,  sat: 70, light: 30, alpha: 0.40 },
-      startled: { hue: 0,   sat: 70, light: 25, alpha: 0.45 },
-      sleepy:   { hue: 220, sat: 40, light: 15, alpha: 0.35 },
-      confused: { hue: 280, sat: 40, light: 20, alpha: 0.35 },
-      orbit:    { hue: 180, sat: 50, light: 22, alpha: 0.40 },
-      comet:    { hue: 210, sat: 60, light: 22, alpha: 0.40 },
-      burst:    { hue: 0,   sat: 60, light: 27, alpha: 0.45 },
-      disco:    { hue: (this.clock * 60) % 360, sat: 60, light: 27, alpha: 0.45 },
-      rocket:   { hue: 25,  sat: 80, light: 30, alpha: 0.50 },
-      hypno:    { hue: 280, sat: 60, light: 22, alpha: 0.45 },
-    };
-    const tint = stateTints[this.state] || stateTints.idle;
-    // Pulsing alpha for "alive" feel (subtle 0.5Hz pulse)
-    const pulse = 0.85 + 0.15 * Math.sin(this.clock * 0.5 * TAU);
-    ctx.fillStyle = `hsla(${tint.hue}, ${tint.sat}%, ${tint.light}%, ${tint.alpha * pulse})`;
+    // 1. LOGO MODE: soft spotlight gradient behind Shiku (boutique presentation).
+    // Radial gradient: brighter center → darker edges (like a studio spotlight).
+    const spotlightGrad = ctx.createRadialGradient(256, 280, 50, 256, 280, 350);
+    spotlightGrad.addColorStop(0, 'rgba(60, 70, 65, 0.40)');
+    spotlightGrad.addColorStop(0.5, 'rgba(35, 40, 38, 0.25)');
+    spotlightGrad.addColorStop(1, 'rgba(10, 10, 10, 0)');
+    ctx.fillStyle = spotlightGrad;
     ctx.fillRect(0, 0, 512, 512);
+
+    // LOGO MODE: consistent premium dark background (no state-reactive tint).
+    // The spotlight above provides the "alive" feel without distracting color shifts.
 
     // 2. Ambient dust (atmospheric perspective layer).
     if (this._ambientDust) {
@@ -879,10 +869,12 @@ class Brain {
     const burstScale = (this.state === 'burst' && this._burstScale) ? this._burstScale : 1;
     const cometScale = (this.state === 'comet') ? 0.3 : 1;
 
-    // Slow hue cycle for surreal quality (±15° over 20s)
-    const hueShift = Math.sin(this.clock * 0.05) * 15;
+    // LOGO MODE: simplified to 3 clean layers (base + key + rim).
+    // Removed: fill light, ambient occlusion, SSS, bloom — too busy for a logo.
+    // Subtle hue shift (±8° over 30s — barely perceptible, adds life)
+    const hueShift = Math.sin(this.clock * 0.033) * 8;
 
-    // Light direction: top-left (consistent across all shapes)
+    // Light direction: top-left (consistent, premium studio lighting)
     const lightDX = -0.5, lightDY = -0.5;
 
     // Helper: draw multi-layer gradient on a circular shape
@@ -914,18 +906,7 @@ class Brain {
       ctx.arc(cx, cy, radius, 0, TAU);
       ctx.fill();
 
-      // 3. FILL LIGHT — softer, opposite side (fills shadows)
-      const fillX = cx - lightDX * radius * 0.4;
-      const fillY = cy - lightDY * radius * 0.4;
-      const fillGrad = ctx.createRadialGradient(fillX, fillY, 0, fillX, fillY, radius * 0.6);
-      fillGrad.addColorStop(0, `hsla(${baseHue + hueShift - 30}, 25%, 55%, 0.20)`);
-      fillGrad.addColorStop(1, `hsla(${baseHue + hueShift}, 20%, 50%, 0)`);
-      ctx.fillStyle = fillGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.fill();
-
-      // 4. RIM LIGHT — thin bright crescent at bottom-right edge (backlight)
+      // 3. RIM LIGHT — thin bright crescent at bottom-right edge (backlight)
       const rimGrad = ctx.createRadialGradient(
         cx - lightDX * radius * 0.8, cy - lightDY * radius * 0.8, radius * 0.7,
         cx - lightDX * radius * 0.8, cy - lightDY * radius * 0.8, radius
@@ -938,60 +919,16 @@ class Brain {
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, TAU);
       ctx.fill();
-
-      // 5. AMBIENT OCCLUSION — dark gradient at bottom (where head meets body)
-      const aoGrad = ctx.createRadialGradient(
-        cx, cy + radius * 0.6, 0,
-        cx, cy + radius * 0.6, radius * 0.5
-      );
-      aoGrad.addColorStop(0, `hsla(${baseHue + hueShift - 20}, 40%, 15%, 0.25)`);
-      aoGrad.addColorStop(1, `hsla(${baseHue + hueShift}, 30%, 20%, 0)`);
-      ctx.fillStyle = aoGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.fill();
     };
 
-    // Helper: draw subsurface scattering on thin edges (ears, tail)
-    const drawSSS = (cx, cy, radius, hue) => {
-      const sssGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      sssGrad.addColorStop(0, `hsla(${hue + hueShift}, 70%, 65%, 0.25)`);
-      sssGrad.addColorStop(0.5, `hsla(${hue + hueShift}, 80%, 55%, 0.10)`);
-      sssGrad.addColorStop(1, `hsla(${hue + hueShift}, 80%, 50%, 0)`);
-      ctx.fillStyle = sssGrad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, TAU);
-      ctx.fill();
-    };
-
-    // Apply to HEAD (200×200 at (256, 200+rocketY))
+    // LOGO MODE: simplified — removed SSS + bloom (too busy for a logo).
+    // Apply to HEAD (premium emerald: hue=155, sat=45, light=35)
     const headR = 100 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
-    drawSphere(256, 200 + rocketY, headR, 75, 35, 45);  // olive green base (hue=75, sat=35, light=45)
+    drawSphere(256, 200 + rocketY, headR, 155, 45, 35);
 
-    // Apply to BODY (180×200 at (256, 340+rocketY))
+    // Apply to BODY (slightly different emerald hue for depth)
     const bodyR = 95 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
-    drawSphere(256, 340 + rocketY, bodyR, 70, 40, 50);  // slightly different hue for body
-
-    // Subsurface scattering on ear tips (thin edges — light passes through)
-    drawSSS(200, 110 + rocketY, 30, 20);  // earL — warm orange SSS
-    drawSSS(312, 110 + rocketY, 30, 20);  // earR
-
-    // Subsurface scattering on tail tip (orange gradient — light passes through)
-    drawSSS(475, 340 + rocketY, 15, 25);  // tail6 tip
-
-    // BLOOM/glow on bright spots (surreal quality) — draw soft glow around
-    // the key light positions, then let the canvas's natural alpha blending
-    // create the bloom effect.
-    const bloomGrad = ctx.createRadialGradient(
-      256 + lightDX * headR * 0.5, 200 + rocketY + lightDY * headR * 0.5, 0,
-      256 + lightDX * headR * 0.5, 200 + rocketY + lightDY * headR * 0.5, headR * 0.8
-    );
-    bloomGrad.addColorStop(0, `hsla(${50 + hueShift}, 60%, 90%, 0.15)`);
-    bloomGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = bloomGrad;
-    ctx.beginPath();
-    ctx.arc(256, 200 + rocketY, headR * 1.5, 0, TAU);
-    ctx.fill();
+    drawSphere(256, 340 + rocketY, bodyR, 150, 50, 40);
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────
@@ -1545,7 +1482,7 @@ class Brain {
     // than glasses — ears are heavier, lag more). Gives secondary motion.
     // Target = the brain's target.earL/earR values (set by state overrides).
     // The spring's pos drives the actual ear rotation in writeArtboard.
-    const earω = 6;
+    const earω = 4;  // LOGO MODE: slower ear spring (calmer, more deliberate)
     const earω2 = earω * earω;
     this.earSpringL.target = this.target.earL;
     this.earSpringR.target = this.target.earR;
@@ -1953,7 +1890,7 @@ class Brain {
 
     // ── Tail wag: 6 segments oscillating with phase offset ───────────
     const wagFreq = TAU / 0.7; // rad/s
-    const wagAmp = 0.3 + this.target.wagSpeed * 0.5; // 0.3..0.8 rad
+    const wagAmp = 0.05 + this.target.wagSpeed * 0.10; // LOGO MODE: subtle (0.05..0.15 rad)
     for (let i = 1; i <= 6; i++) {
       const shape = s[`tail${i}`];
       if (!shape) continue;
