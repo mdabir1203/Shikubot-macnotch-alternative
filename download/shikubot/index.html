@@ -2,17 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0A0A0A" />
+  <link rel="manifest" href="./manifest.json" />
   <title>Shiku</title>
   <style>
+    * { -webkit-tap-highlight-color: transparent; }
     html, body {
       margin: 0; padding: 0;
-      height: 100%;
+      width: 100%;
+      height: 100dvh;
       background: #0A0A0A;
       color: #E8E8E8;
       font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
       overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
       image-rendering: -webkit-optimize-contrast;
     }
     .stage {
@@ -22,35 +31,75 @@
       place-items: center;
       touch-action: none;
     }
-    /* Logo canvas: fills 90% of viewport (min dimension), centered.
-       Internal resolution 1024×1024 for 4K-quality on retina. */
+    /* Mobile-first: fill 85% of viewport (mobile screens are smaller).
+       On desktop: cap at 600px. Internal res 1024 for 4K retina. */
     #background-canvas, #rive-canvas, #particles-canvas {
       position: absolute;
-      width: min(90vmin, 1024px);
-      height: min(90vmin, 1024px);
-      top: 50%; left: 50%;
+      width: min(85vmin, 600px);
+      height: min(85vmin, 600px);
+      top: 48%; left: 50%;
       transform: translate(-50%, -50%);
     }
     #background-canvas { z-index: 0; pointer-events: none; }
     #rive-canvas { z-index: 1; }
     #particles-canvas { z-index: 2; pointer-events: none; }
-    /* Subtle wordmark — bottom center, very low opacity (boutique minimal) */
+
+    /* Activity badge — shows what the app is doing (live updates) */
+    .activity-badge {
+      position: fixed;
+      top: max(12px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      font-family: ui-monospace, monospace;
+      padding: 4px 10px;
+      background: rgba(217, 91, 43, 0.15);
+      border: 1px solid rgba(240, 138, 63, 0.25);
+      border-radius: 4px;
+      z-index: 3;
+      pointer-events: none;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      white-space: nowrap;
+    }
+    .activity-badge .label { opacity: 0.5; }
+    .activity-badge .value { color: #F08A3F; font-weight: 600; }
+
+    /* Wordmark */
     .wordmark {
       position: fixed;
-      bottom: 5vh; left: 50%;
+      bottom: max(16px, env(safe-area-inset-bottom));
+      left: 50%;
       transform: translateX(-50%);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 300;
       letter-spacing: 0.4em;
       text-transform: uppercase;
-      opacity: 0.25;
+      opacity: 0.2;
       color: #E8E8E8;
       pointer-events: none;
       z-index: 3;
     }
+    /* Hint text — auto-hides after 5s */
+    .hint {
+      position: fixed;
+      bottom: max(40px, calc(env(safe-area-inset-bottom) + 24px));
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      opacity: 0;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      z-index: 3;
+      text-transform: uppercase;
+      transition: opacity 1s ease;
+    }
+    .hint.visible { opacity: 0.35; }
   </style>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%233A8B5C'/></svg>" />
-  <script type="module" crossorigin src="./assets/index-BLDu5ADH.js"></script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%238B9A6B'/></svg>" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%238B9A6B'/></svg>" />
+  <script type="module" crossorigin src="./assets/index-BDUyKYPK.js"></script>
 </head>
 <body>
   <main class="stage">
@@ -58,8 +107,39 @@
     <canvas id="rive-canvas" width="1024" height="1024"></canvas>
     <canvas id="particles-canvas" width="1024" height="1024"></canvas>
   </main>
+  <div class="activity-badge"><span class="label">activity:</span> <span class="value" id="activity-value">idle</span></div>
   <p class="wordmark">Shiku</p>
+  <p class="hint" id="hint">tap to interact · swipe to surprise</p>
 
   <script src="./rive-basic.js"></script>
+  <script>
+    // Activity badge updater — shows current Shiku state
+    function updateActivityBadge() {
+      const el = document.getElementById('activity-value');
+      if (window.shiku && el) {
+        el.textContent = window.shiku.state;
+      }
+      requestAnimationFrame(updateActivityBadge);
+    }
+    updateActivityBadge();
+
+    // Show hint for 5 seconds on load, then fade out
+    const hint = document.getElementById('hint');
+    if (hint) {
+      hint.classList.add('visible');
+      setTimeout(() => hint.classList.remove('visible'), 5000);
+    }
+
+    // Auto-start demo mode on first load (showcases all task states)
+    // Comment out to disable auto-demo
+    if (window.shiku) {
+      // Wait for shiku to be ready, then auto-greet
+      setTimeout(() => {
+        if (window.shiku && window.shiku.greet) {
+          window.shiku.greet();
+        }
+      }, 1000);
+    }
+  </script>
 </body>
 </html>

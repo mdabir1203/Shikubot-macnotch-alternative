@@ -2080,9 +2080,105 @@ export function createBrain(opts) {
       brain.go(next);
       return next;
     },
+
+    // ── APP ACTIVITY API (mobile dynamic logo: states driven by app activity) ──
+    // This is the main integration point for using Shiku as a dynamic logo.
+    // The app calls setActivity() whenever its state changes, and Shiku
+    // reacts with the appropriate visual response.
+    //
+    // Usage:
+    //   shiku.setActivity('startup')     // app launched → greeting wave
+    //   shiku.setActivity('loading')     // processing → focused typing
+    //   shiku.setActivity('uploading')   // upload → looking up
+    //   shiku.setActivity('error')       // error → startled grimace
+    //   shiku.setActivity('complete')    // done → big smile + sparkles
+    //   shiku.setActivity('idle')        // nothing happening → calm idle
+    //   shiku.setActivity('background')  // app backgrounded → sleepy
+    //   shiku.setActivity('notification')// push notification → excited
+    //   shiku.setActivity('returning')   // user returned → curious
+    //   shiku.setActivity('sync')        // syncing data → working
+    //   shiku.setActivity('search')      // searching → curious
+    //   shiku.setActivity('success')     // action succeeded → finished
+    //
+    // Returns the Shiku state name that was activated.
+    setActivity: (activity) => {
+      const ACTIVITY_MAP = {
+        'startup':      'greeting',
+        'loading':      'working',
+        'processing':   'working',
+        'syncing':      'working',
+        'uploading':    'upload',
+        'downloading':  'upload',
+        'error':        'error',
+        'failed':       'error',
+        'complete':     'finished',
+        'success':      'finished',
+        'done':         'finished',
+        'idle':         'idle',
+        'background':   'sleepy',
+        'notification': 'excited',
+        'returning':    'curious',
+        'search':       'curious',
+        'thinking':     'confused',
+        'welcome':      'greeting',
+      };
+      const state = ACTIVITY_MAP[activity] || 'idle';
+      brain.go(state);
+      return state;
+    },
+
+    // ── DEMO SHOWCASE MODE (auto-cycles through task states for presentations) ──
+    // Cycles through all the task states with natural timing to show
+    // stakeholders how the logo responds to different app activities.
+    // Call shiku.demo() to start, shiku.demoStop() to stop.
+    demo: () => {
+      const sequence = [
+        { activity: 'startup',     duration: 2500 },
+        { activity: 'loading',     duration: 4000 },
+        { activity: 'uploading',   duration: 3000 },
+        { activity: 'loading',     duration: 2000 },
+        { activity: 'complete',    duration: 3000 },
+        { activity: 'idle',       duration: 2000 },
+        { activity: 'notification',duration: 2000 },
+        { activity: 'error',       duration: 2500 },
+        { activity: 'returning',   duration: 2000 },
+        { activity: 'search',      duration: 3000 },
+        { activity: 'success',     duration: 3000 },
+        { activity: 'background',  duration: 3000 },
+        { activity: 'startup',     duration: 2000 },
+      ];
+      let i = 0;
+      const runNext = () => {
+        if (i >= sequence.length) i = 0;  // loop
+        const step = sequence[i];
+        brain.constructor.prototype.constructor;  // noop to avoid lint
+        const stateMap = {
+          'startup': 'greeting', 'loading': 'working', 'uploading': 'upload',
+          'complete': 'finished', 'idle': 'idle', 'notification': 'excited',
+          'error': 'error', 'returning': 'curious', 'search': 'curious',
+          'success': 'finished', 'background': 'sleepy',
+        };
+        brain.go(stateMap[step.activity] || 'idle');
+        console.log(`[shiku.demo] activity: ${step.activity} → state: ${brain.state} (${step.duration}ms)`);
+        i++;
+        brain._demoTimer = setTimeout(runNext, step.duration);
+      };
+      if (brain._demoTimer) clearTimeout(brain._demoTimer);
+      runNext();
+    },
+    demoStop: () => {
+      if (brain._demoTimer) {
+        clearTimeout(brain._demoTimer);
+        brain._demoTimer = null;
+        console.log('[shiku.demo] stopped');
+      }
+      brain.go('idle');
+    },
+
     // Debug access (not in contract but useful):
     brain,
     get state() { return brain.state; },
+    get activity() { return brain._currentActivity || 'idle'; },
     get clock() { return brain.clock; },
   };
   return brain;
