@@ -1,0 +1,585 @@
+<Rive version="1" kind="fragment">
+    <!--
+        Shiku Bot — Phase 1 RML authoring.
+        Artwork proportions per master prompt defaults (assets/frames/ empty
+        after YouTube bot-detection blocked extraction; see assets/frames/README.md).
+        Palette: fur #8E9A3B / light #A9B44E / shadow #6E7828; hair+tail-tip+inner-ear
+        #D95B2B→#F08A3F; glasses #202020; sclera #FFFFFF; pupil #141414;
+        mouth #A9322C; tongue #D9534A.
+        Draw order is front-to-back (Rive: first declared paints on top).
+        State machine consumes only the 6 go* triggers + auto-exit on startled;
+        the 12 number inputs + blink are declared for the contract — the JS
+        brain writes them per-frame and drives visual changes directly via the
+        runtime API in Phase 3. State animations are no-op timelines for v1;
+        keyframes land in iteration 2.
+    -->
+    <Artboard defaultStateMachineId="0:7" styleId="0:300" width="512" height="512" name="Artboard" id="0:2">
+        <!-- Per gotchas: artboard needs a LayoutComponentStyle linked via styleId
+             or its contents don't draw at runtime. -->
+        <LayoutComponentStyle name="Artboard Style" id="0:300"/>
+        <!-- Phase 5: background fill REMOVED — the body CSS + background
+             canvas now provide the background. This lets the background
+             canvas (shadow + dust + state-reactive tint) show through
+             the transparent rive canvas. -->
+
+        <!-- ============================================================
+             BODY PARTS — declared front-to-back (mouth first = on top,
+             tail last = behind). Geometry children of one Shape share the
+             Shape's x/y; the child's own x/y offsets it within the shape.
+             ============================================================ -->
+
+        <!-- 1. MOUTH — radial gradient: bright inner → deep dark edge (depth) -->
+        <Shape x="256" y="270" name="mouth" id="0:10">
+            <Ellipse width="40" height="20" originX="0.5" originY="0.5" name="mouthPath"/>
+            <Fill name="mouthFill">
+                <RadialGradient startX="0" startY="0" endX="22.0" endY="0.0" name="mouthGrad">
+                    <GradientStop colorValue="FFC5403A" position="0"/>
+                    <GradientStop colorValue="FFA9322C" position="0.4"/>
+                    <GradientStop colorValue="FF802520" position="0.85"/>
+                    <GradientStop colorValue="FF601810" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 2. GLASSES — metallic gradient stroke (dark→bright→dark for reflective look) -->
+        <Shape x="256" y="180" name="glasses" id="0:30">
+            <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="-30" y="0" name="leftLens"/>
+            <Ellipse width="60" height="60" originX="0.5" originY="0.5" x="30" y="0" name="rightLens"/>
+            <Stroke thickness="4" cap="round" join="round" name="glassesStroke">
+                <LinearGradient startX="-30" startY="0" endX="30" endY="0" name="glassesGrad">
+                    <GradientStop colorValue="FF1A1A1A" position="0"/>
+                    <GradientStop colorValue="FF404040" position="0.3"/>
+                    <GradientStop colorValue="FF707070" position="0.5"/>
+                    <GradientStop colorValue="FF303030" position="0.7"/>
+                    <GradientStop colorValue="FF1A1A1A" position="1"/>
+                </LinearGradient>
+            </Stroke>
+        </Shape>
+
+        <!-- 3. EYES — right eye then left eye, each: lid → pupil → sclera
+             (lid in front so blink covers pupil/sclera; sclera behind both) -->
+        <!-- Right eye — lid has matching head gradient for seamless blink; -->
+        <!-- pupil has specular highlight (top-left bright spot); sclera has depth gradient -->
+        <Shape x="286" y="180" name="eyeR_lid" id="0:20">
+            <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidRPath"/>
+            <Fill name="lidRFill">
+                <RadialGradient startX="-10" startY="-10" endX="20.0" endY="-10.0" name="lidRGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="286" y="180" name="eyeR_pupil" id="0:21">
+            <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilRPath"/>
+            <Fill name="pupilRFill">
+                <RadialGradient startX="-3" startY="-3" endX="7.0" endY="-3.0" name="pupilRGrad">
+                    <GradientStop colorValue="FF4A4A3A" position="0"/>
+                    <GradientStop colorValue="FF2A2A2A" position="0.2"/>
+                    <GradientStop colorValue="FF141414" position="0.5"/>
+                    <GradientStop colorValue="FF0A0A0A" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="286" y="180" name="eyeR_sclera" id="0:22">
+            <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraRPath"/>
+            <Fill name="scleraRFill">
+                <RadialGradient startX="0" startY="0" endX="25.0" endY="0.0" name="scleraRGrad">
+                    <GradientStop colorValue="FFFFFFFF" position="0"/>
+                    <GradientStop colorValue="FFF5F5F5" position="0.4"/>
+                    <GradientStop colorValue="FFE0E0E0" position="0.85"/>
+                    <GradientStop colorValue="FFC8C8C8" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <!-- Left eye — same gradient pattern as right eye -->
+        <Shape x="226" y="180" name="eyeL_lid" id="0:23">
+            <Rectangle width="44" height="44" originX="0.5" originY="0.5" name="lidLPath"/>
+            <Fill name="lidLFill">
+                <RadialGradient startX="-10" startY="-10" endX="20.0" endY="-10.0" name="lidLGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="226" y="180" name="eyeL_pupil" id="0:24">
+            <Ellipse width="16" height="16" originX="0.5" originY="0.5" name="pupilLPath"/>
+            <Fill name="pupilLFill">
+                <RadialGradient startX="-3" startY="-3" endX="7.0" endY="-3.0" name="pupilLGrad">
+                    <GradientStop colorValue="FF4A4A3A" position="0"/>
+                    <GradientStop colorValue="FF2A2A2A" position="0.2"/>
+                    <GradientStop colorValue="FF141414" position="0.5"/>
+                    <GradientStop colorValue="FF0A0A0A" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="226" y="180" name="eyeL_sclera" id="0:25">
+            <Ellipse width="40" height="40" originX="0.5" originY="0.5" name="scleraLPath"/>
+            <Fill name="scleraLFill">
+                <RadialGradient startX="0" startY="0" endX="25.0" endY="0.0" name="scleraLGrad">
+                    <GradientStop colorValue="FFFFFFFF" position="0"/>
+                    <GradientStop colorValue="FFF5F5F5" position="0.4"/>
+                    <GradientStop colorValue="FFE0E0E0" position="0.85"/>
+                    <GradientStop colorValue="FFC8C8C8" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 4. HAIR TUFT — between ears, orange gradient -->
+        <Shape x="256" y="95" name="hairTuft" id="0:40">
+            <PointsPath isClosed="true" isClockwise="true" name="tuftPath">
+                <StraightVertex x="0" y="-15"/>
+                <StraightVertex x="10" y="5"/>
+                <StraightVertex x="-10" y="5"/>
+            </PointsPath>
+            <Fill name="tuftFill">
+                <LinearGradient startX="0" startY="-15" endX="0" endY="5" name="tuftGradient">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FFD95B2B" position="0.4"/>
+                    <GradientStop colorValue="FFA04020" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 5. EARS — linear gradient with subsurface scattering (warm tip → fur → shadow → dark base) -->
+        <Shape x="312" y="110" name="earR" id="0:50">
+            <!-- 2026 trend: curved fox-ear shape (not straight triangle). Wider at base, curves to pointed tip. -->
+            <PointsPath isClosed="true" isClockwise="true" name="earRPath">
+                <StraightVertex x="-14" y="38" radius="10"/>
+                <StraightVertex x="14" y="38" radius="10"/>
+                <CubicMirroredVertex x="7" y="0" rotation="-0.4" distance="22"/>
+                <CubicMirroredVertex x="0" y="-42" rotation="0" distance="8"/>
+                <CubicMirroredVertex x="-7" y="0" rotation="0.4" distance="22"/>
+            </PointsPath>
+            <Fill name="earRFill">
+                <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earRGrad">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.25"/>
+                    <GradientStop colorValue="FF6E7828" position="0.6"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+        <Shape x="200" y="110" name="earL" id="0:51">
+            <!-- 2026 trend: curved fox-ear shape (mirrored from earR). -->
+            <PointsPath isClosed="true" isClockwise="true" name="earLPath">
+                <StraightVertex x="-14" y="38" radius="10"/>
+                <StraightVertex x="14" y="38" radius="10"/>
+                <CubicMirroredVertex x="7" y="0" rotation="-0.4" distance="22"/>
+                <CubicMirroredVertex x="0" y="-42" rotation="0" distance="8"/>
+                <CubicMirroredVertex x="-7" y="0" rotation="0.4" distance="22"/>
+            </PointsPath>
+            <Fill name="earLFill">
+                <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earLGrad">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.25"/>
+                    <GradientStop colorValue="FF6E7828" position="0.6"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 6. HEAD — radial gradient sphere lighting: highlight → mid → base → shadow → rim -->
+        <Shape x="256" y="200" name="head" id="0:60">
+            <Ellipse width="200" height="200" originX="0.5" originY="0.5" name="headPath"/>
+            <Fill name="headFill">
+                <RadialGradient startX="-40" startY="-40" endX="80.0" endY="-40.0" name="headGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.2"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.5"/>
+                    <GradientStop colorValue="FF6E7828" position="0.8"/>
+                    <GradientStop colorValue="FF4A5018" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 7. BODY — radial gradient sphere lighting (shifted light angle from head) -->
+        <Shape x="256" y="340" name="body" id="0:70">
+            <Ellipse width="180" height="200" originX="0.5" originY="0.5" name="bodyPath"/>
+            <Fill name="bodyFill">
+                <RadialGradient startX="-40" startY="-40" endX="80.0" endY="-40.0" name="bodyGrad">
+                    <GradientStop colorValue="FFC5D86E" position="0"/>
+                    <GradientStop colorValue="FFA9B44E" position="0.15"/>
+                    <GradientStop colorValue="FF9BA84A" position="0.4"/>
+                    <GradientStop colorValue="FF7A8535" position="0.7"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+
+        <!-- 8. TAIL — 6 tapering segments, behind body.
+             tail1 is largest (closest to body), tail6 is tip (orange gradient).
+             Declared tip-first so the base is drawn last (behind other segments). -->
+        <!-- 8. TAIL — 6 segments with radial gradient sphere lighting (highlight → base → shadow) -->
+        <Shape x="475" y="340" name="tail6" id="0:80">
+            <Ellipse width="10" height="10" originX="0.5" originY="0.5" name="tail6Path"/>
+            <Fill name="tail6Fill">
+                <LinearGradient startX="-5" startY="0" endX="5" endY="0" name="tail6Grad">
+                    <GradientStop colorValue="FFF08A3F" position="0"/>
+                    <GradientStop colorValue="FFD95B2B" position="0.5"/>
+                    <GradientStop colorValue="FFA04020" position="1"/>
+                </LinearGradient>
+            </Fill>
+        </Shape>
+        <Shape x="460" y="340" name="tail5" id="0:81">
+            <Ellipse width="14" height="14" originX="0.5" originY="0.5" name="tail5Path"/>
+            <Fill name="tail5Fill">
+                <RadialGradient startX="-2" startY="-2" endX="7.0" endY="-2.0" name="tail5Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="445" y="340" name="tail4" id="0:82">
+            <Ellipse width="18" height="18" originX="0.5" originY="0.5" name="tail4Path"/>
+            <Fill name="tail4Fill">
+                <RadialGradient startX="-3" startY="-3" endX="8.0" endY="-3.0" name="tail4Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="425" y="340" name="tail3" id="0:83">
+            <Ellipse width="22" height="22" originX="0.5" originY="0.5" name="tail3Path"/>
+            <Fill name="tail3Fill">
+                <RadialGradient startX="-3" startY="-3" endX="10.0" endY="-3.0" name="tail3Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="400" y="340" name="tail2" id="0:84">
+            <Ellipse width="26" height="26" originX="0.5" originY="0.5" name="tail2Path"/>
+            <Fill name="tail2Fill">
+                <RadialGradient startX="-4" startY="-4" endX="11.0" endY="-4.0" name="tail2Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+        <Shape x="370" y="340" name="tail1" id="0:85">
+            <Ellipse width="30" height="30" originX="0.5" originY="0.5" name="tail1Path"/>
+            <Fill name="tail1Fill">
+                <RadialGradient startX="-5" startY="-5" endX="12.0" endY="-5.0" name="tail1Grad">
+                    <GradientStop colorValue="FFA9B44E" position="0"/>
+                    <GradientStop colorValue="FF8E9A3B" position="0.4"/>
+                    <GradientStop colorValue="FF6E7828" position="0.85"/>
+                    <GradientStop colorValue="FF556020" position="1"/>
+                </RadialGradient>
+            </Fill>
+        </Shape>
+
+        <!-- ============================================================
+             STATE MACHINE "Brain" — the single SM, auto-plays on load
+             (defaultStateMachineId above). 19 declared inputs (12 numbers
+             + 7 triggers). 1 layer with 6 AnimationStates + 30 trigger
+             transitions. any→startled is highest priority (first transition
+             in each state). Sleepy only reachable via goSleepy trigger.
+             Startled auto-exits to curious after 1.2s (72 frames at 60fps).
+             ============================================================ -->
+        <StateMachine name="Brain" id="0:7">
+            <!-- NUMBER inputs (the contract — JS brain writes per-frame) -->
+            <StateMachineNumber name="gazeX" id="0:100"/>
+            <StateMachineNumber name="gazeY" id="0:101"/>
+            <StateMachineNumber name="headTilt" id="0:102"/>
+            <StateMachineNumber name="earL" id="0:103"/>
+            <StateMachineNumber name="earR" id="0:104"/>
+            <StateMachineNumber name="lidL" id="0:105"/>
+            <StateMachineNumber name="lidR" id="0:106"/>
+            <StateMachineNumber name="mouthOpen" id="0:107"/>
+            <StateMachineNumber name="smile" id="0:108"/>
+            <StateMachineNumber name="wagSpeed" id="0:109"/>
+            <StateMachineNumber name="glassesLift" id="0:110"/>
+            <StateMachineNumber name="glassesCrooked" id="0:111"/>
+            <!-- TRIGGER inputs (blink on a brain schedule; go* fired by shiku.go()) -->
+            <StateMachineTrigger name="blink" id="0:112"/>
+            <StateMachineTrigger name="goIdle" id="0:113"/>
+            <StateMachineTrigger name="goCurious" id="0:114"/>
+            <StateMachineTrigger name="goExcited" id="0:115"/>
+            <StateMachineTrigger name="goStartled" id="0:116"/>
+            <StateMachineTrigger name="goSleepy" id="0:117"/>
+            <StateMachineTrigger name="goConfused" id="0:118"/>
+            <!-- FUNKY EXTENDED TRIGGERS (Phase 4) -->
+            <StateMachineTrigger name="goOrbit" id="0:400"/>
+            <StateMachineTrigger name="goComet" id="0:401"/>
+            <StateMachineTrigger name="goBurst" id="0:402"/>
+            <StateMachineTrigger name="goDisco" id="0:403"/>
+            <StateMachineTrigger name="goRocket" id="0:404"/>
+            <StateMachineTrigger name="goHypno" id="0:405"/>
+            <!-- TASK STATE TRIGGERS (Novra case study) -->
+            <StateMachineTrigger name="goWorking" id="0:500"/>
+            <StateMachineTrigger name="goUpload" id="0:501"/>
+            <StateMachineTrigger name="goError" id="0:502"/>
+            <StateMachineTrigger name="goFinished" id="0:503"/>
+            <StateMachineTrigger name="goGreeting" id="0:504"/>
+
+            <StateMachineLayer name="StateSequencing" id="0:120">
+                <!-- AnyState: transitions here fire from ANY state. Used for
+                     the 6 funky extended triggers (goOrbit, goComet, etc.) so
+                     we don't have to add 36 transitions to the 6 original
+                     states. State-specific transitions (e.g. goStartled)
+                     still take priority over AnyState transitions. -->
+                <AnyState x="0" y="-120">
+                    <StateTransition stateToId="0:410">
+                        <TransitionTriggerCondition inputId="0:400"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:411">
+                        <TransitionTriggerCondition inputId="0:401"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:412">
+                        <TransitionTriggerCondition inputId="0:402"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:413">
+                        <TransitionTriggerCondition inputId="0:403"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:414">
+                        <TransitionTriggerCondition inputId="0:404"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:415">
+                        <TransitionTriggerCondition inputId="0:405"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:510">
+                        <TransitionTriggerCondition inputId="0:500"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:511">
+                        <TransitionTriggerCondition inputId="0:501"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:512">
+                        <TransitionTriggerCondition inputId="0:502"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:513">
+                        <TransitionTriggerCondition inputId="0:503"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:514">
+                        <TransitionTriggerCondition inputId="0:504"/>
+                    </StateTransition>
+                </AnyState>
+                <ExitState x="800" y="-120"/>
+                <EntryState>
+                    <StateTransition stateToId="0:130"/>
+                </EntryState>
+
+                <!-- idle (entry point) — goStartled first = highest priority -->
+                <AnimationState animationId="0:200" id="0:130" x="160" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- curious -->
+                <AnimationState animationId="0:201" id="0:131" x="320" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- excited -->
+                <AnimationState animationId="0:202" id="0:132" x="480" y="0">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- startled — auto-exits to curious when anim completes
+                     (72 frames = 1.2s at 60fps). Per master prompt:
+                     "startled→recovery 1.2s ... → exits to curious".
+                     exitTimeIsPercetange is the format's misspelling (sic). -->
+                <AnimationState animationId="0:203" id="0:133" x="320" y="160">
+                    <StateTransition stateToId="0:131"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- sleepy — only reachable via goSleepy (no other state lists
+                     a transition to 0:134 except via goSleepy trigger) -->
+                <AnimationState animationId="0:204" id="0:134" x="160" y="160">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:135">
+                        <TransitionTriggerCondition inputId="0:118"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- confused -->
+                <AnimationState animationId="0:205" id="0:135" x="480" y="160">
+                    <StateTransition stateToId="0:133">
+                        <TransitionTriggerCondition inputId="0:116"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:130">
+                        <TransitionTriggerCondition inputId="0:113"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:131">
+                        <TransitionTriggerCondition inputId="0:114"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:132">
+                        <TransitionTriggerCondition inputId="0:115"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:134">
+                        <TransitionTriggerCondition inputId="0:117"/>
+                    </StateTransition>
+                </AnimationState>
+
+                <!-- ============================================================
+                     FUNKY EXTENDED STATES (Phase 4) — crazy interactions.
+                     Each has its own animation timeline + auto-exit rules.
+                     Reached via AnyState transitions triggered by goOrbit,
+                     goComet, goBurst, goDisco, goRocket, goHypno.
+                     ============================================================ -->
+
+                <!-- orbit: 3.4s loop. 6 depth-sorted orbit rings, eyes whip
+                     around the sphere at 1.25 turns/s. Per bloub's orbit state. -->
+                <AnimationState animationId="0:420" id="0:410" x="160" y="320"/>
+
+                <!-- comet: 2.4s loop. Body collapses to a dot, 4 ribbons
+                     orbit at 210°/s around the stationary dot. -->
+                <AnimationState animationId="0:421" id="0:411" x="320" y="320"/>
+
+                <!-- burst: 2.6s oneShot. Body collapses to 0.166 then regrows,
+                     5 particles spiral inward (behind body, occluded).
+                     Auto-exits to curious. -->
+                <AnimationState animationId="0:422" id="0:412" x="480" y="320">
+                    <StateTransition stateToId="0:131"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                </AnimationState>
+
+                <!-- disco: 4s loop. Body hue-cycles, glasses flash rainbow,
+                     sparkle storm. -->
+                <AnimationState animationId="0:423" id="0:413" x="640" y="320"/>
+
+                <!-- rocket: 3s oneShot. Shiku shoots upward with flame trail,
+                     then falls back. Auto-exits to idle. -->
+                <AnimationState animationId="0:424" id="0:414" x="640" y="160">
+                    <StateTransition stateToId="0:130"
+                                     enableExitTime="true"
+                                     exitTimeIsPercetange="true"
+                                     exitTime="100"
+                                     duration="150"/>
+                </AnimationState>
+
+                <!-- hypno: 5s loop. Eyes become swirling spirals, glasses spin. -->
+                <AnimationState animationId="0:425" id="0:415" x="640" y="0"/>
+
+                <!-- ============================================================
+                     TASK STATES (Novra case study: "A character needs more
+                     than working and done"). These make the logo FUNCTIONAL
+                     as an app status indicator.
+                     ============================================================ -->
+
+                <!-- working: 6s loop. Focused, subtle typing motion, slow wag. -->
+                <AnimationState animationId="0:520" id="0:510" x="160" y="480"/>
+
+                <!-- upload: 3s loop. Looking up, eyes wide, watching progress. -->
+                <AnimationState animationId="0:521" id="0:511" x="320" y="480"/>
+
+                <!-- error: 2s loop. Startled-held, glasses crooked, grimace. -->
+                <AnimationState animationId="0:522" id="0:512" x="480" y="480"/>
+
+                <!-- finished: 4s loop. Big smile, satisfied, sparkles. -->
+                <AnimationState animationId="0:523" id="0:513" x="640" y="480"/>
+
+                <!-- greeting: 2s loop. Ear wiggle wave, happy smile, bounce. -->
+                <AnimationState animationId="0:524" id="0:514" x="640" y="320"/>
+            </StateMachineLayer>
+        </StateMachine>
+
+        <!-- ============================================================
+             STATE ANIMATIONS — no-op timelines for Phase 1 v1.
+             Durations match the master prompt's timing spec:
+               - idle: 180 frames (3s loop, room for blink cycle + slow wag)
+               - curious: 180 frames (3s loop)
+               - excited: 120 frames (2s loop, fast wag)
+               - startled: 72 frames (1.2s oneShot — matches "startled→recovery 1.2s")
+               - sleepy: 600 frames (10s loop, slow yawn + z-z-z)
+               - confused: 180 frames (3s loop)
+             Keyframes land in iteration 2 (pupil dilation, tail puff, etc.).
+             ============================================================ -->
+        <LinearAnimation loopValue="loop" duration="180" name="anim_idle" id="0:200"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_curious" id="0:201"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_excited" id="0:202"/>
+        <LinearAnimation loopValue="oneShot" duration="72" name="anim_startled" id="0:203"/>
+        <LinearAnimation loopValue="loop" duration="600" name="anim_sleepy" id="0:204"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_confused" id="0:205"/>
+
+        <!-- FUNKY EXTENDED ANIMATIONS (Phase 4) -->
+        <LinearAnimation loopValue="loop" duration="204" name="anim_orbit" id="0:420"/>
+        <LinearAnimation loopValue="loop" duration="144" name="anim_comet" id="0:421"/>
+        <LinearAnimation loopValue="oneShot" duration="156" name="anim_burst" id="0:422"/>
+        <LinearAnimation loopValue="loop" duration="240" name="anim_disco" id="0:423"/>
+        <LinearAnimation loopValue="oneShot" duration="180" name="anim_rocket" id="0:424"/>
+        <LinearAnimation loopValue="loop" duration="300" name="anim_hypno" id="0:425"/>
+
+        <!-- TASK STATE ANIMATIONS (Novra case study) -->
+        <LinearAnimation loopValue="loop" duration="360" name="anim_working" id="0:520"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_upload" id="0:521"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_error" id="0:522"/>
+        <LinearAnimation loopValue="loop" duration="240" name="anim_finished" id="0:523"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_greeting" id="0:524"/>
+    </Artboard>
+</Rive>

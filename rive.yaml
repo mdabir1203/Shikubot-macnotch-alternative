@@ -1,0 +1,11 @@
+name: shikubot
+main: Artboard
+artboard:
+  width: 512
+  height: 512
+  background: "#1D1D1D"
+output:
+  dir: build
+logs:
+  file: build/rive.log
+  problems: build/problems.log

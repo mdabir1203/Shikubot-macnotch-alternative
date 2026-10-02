@@ -1,0 +1,29 @@
+# Build artifacts
+build/
+dist/
+node_modules/
+*.log
+
+# Rive CLI cache
+.rive-cache/
+
+# PRIVATE — never commit
+# Artwork © Sesame Workshop; .riv, frames, and traced assets stay private.
+assets/frames/*.png
+assets/frames/*.jpg
+assets/frames/*.jpeg
+assets/frames/*.webp
+build/*.riv
+build/*.rev
+*.riv
+*.rev
+
+# Runtime assets (installed via npm + postinstall script)
+public/rive.wasm
+public/rive-basic.js
+public/shikubot.riv
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
