@@ -498,14 +498,20 @@ class AmbientDust {
     this.phase += dt * 0.5;
   }
   render(ctx) {
+    // 2026 trend: BOKEH — larger, softer, more blurred dust particles.
     // Twinkle: subtle alpha oscillation
     const twinkle = 0.4 + 0.3 * Math.sin(this.phase);
-    // Atmospheric perspective: farther = dimmer. Phase 5: boosted visibility.
-    const alpha = twinkle * (0.25 + this.depth * 0.5);
-    const r = this.size * 1.5;  // Phase 5: bigger dust
+    // Atmospheric perspective: farther = dimmer
+    const alpha = twinkle * (0.20 + this.depth * 0.45);
+    const r = this.size * 2.5;  // 2026: larger bokeh circles
     const x = this.cx + this.x * this.scale;
     const y = this.cy + this.y * this.scale;
-    ctx.fillStyle = `hsla(${this.hue}, 40%, 85%, ${alpha})`;
+    // Bokeh: radial gradient (soft edges, not hard circle)
+    const dustGrad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    dustGrad.addColorStop(0, `hsla(${this.hue}, 40%, 85%, ${alpha})`);
+    dustGrad.addColorStop(0.5, `hsla(${this.hue}, 40%, 85%, ${alpha * 0.4})`);
+    dustGrad.addColorStop(1, `hsla(${this.hue}, 40%, 85%, 0)`);
+    ctx.fillStyle = dustGrad;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, TAU);
     ctx.fill();
@@ -924,11 +930,45 @@ class Brain {
     // LOGO MODE: simplified — removed SSS + bloom (too busy for a logo).
     // Apply to HEAD (premium emerald: hue=155, sat=45, light=35)
     const headR = 100 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
-    drawSphere(256, 200 + rocketY, headR, 155, 45, 35);
+    // 2026 trend: sage green palette (hue=85) matching the reference image.
+    drawSphere(256, 200 + rocketY, headR, 85, 35, 35);
 
-    // Apply to BODY (slightly different emerald hue for depth)
+    // Apply to BODY (sage green: hue=80, slightly different from head for depth)
     const bodyR = 95 * (burstScale !== 1 ? burstScale : 1) * (cometScale !== 1 ? cometScale : 1);
-    drawSphere(256, 340 + rocketY, bodyR, 150, 50, 40);
+    drawSphere(256, 340 + rocketY, bodyR, 80, 40, 40);
+
+    // 2026 trend: GLASSMORPHISM — translucent white sweep across the body
+    // that creates a "glossy, reflective surface—like glass, plastic, or wet
+    // ceramic—giving it a 'gummy' or 'jelly-like' material quality."
+    // Positioned on the right side (2→5 o'clock) per the reference image.
+    const glassGrad = ctx.createLinearGradient(
+      256 + headR * 0.3, 200 + rocketY - headR * 0.5,
+      256 + headR * 0.8, 200 + rocketY + headR * 0.3
+    );
+    glassGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    glassGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.12)');
+    glassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.18)');
+    glassGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.08)');
+    glassGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = glassGrad;
+    ctx.beginPath();
+    ctx.arc(256, 200 + rocketY, headR, 0, TAU);
+    ctx.fill();
+
+    // Same glass sweep on body
+    const bodyGlassGrad = ctx.createLinearGradient(
+      256 + bodyR * 0.3, 340 + rocketY - bodyR * 0.5,
+      256 + bodyR * 0.8, 340 + rocketY + bodyR * 0.3
+    );
+    bodyGlassGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    bodyGlassGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.10)');
+    bodyGlassGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
+    bodyGlassGrad.addColorStop(0.7, 'rgba(255, 255, 255, 0.06)');
+    bodyGlassGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = bodyGlassGrad;
+    ctx.beginPath();
+    ctx.arc(256, 340 + rocketY, bodyR, 0, TAU);
+    ctx.fill();
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────

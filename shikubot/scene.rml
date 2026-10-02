@@ -148,7 +148,14 @@
 
         <!-- 5. EARS — linear gradient with subsurface scattering (warm tip → fur → shadow → dark base) -->
         <Shape x="312" y="110" name="earR" id="0:50">
-            <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earRPath"/>
+            <!-- 2026 trend: curved fox-ear shape (not straight triangle). Wider at base, curves to pointed tip. -->
+            <PointsPath isClosed="true" isClockwise="true" name="earRPath">
+                <StraightVertex x="-14" y="38" radius="10"/>
+                <StraightVertex x="14" y="38" radius="10"/>
+                <CubicMirroredVertex x="7" y="0" rotation="-0.4" distance="22"/>
+                <CubicMirroredVertex x="0" y="-42" rotation="0" distance="8"/>
+                <CubicMirroredVertex x="-7" y="0" rotation="0.4" distance="22"/>
+            </PointsPath>
             <Fill name="earRFill">
                 <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earRGrad">
                     <GradientStop colorValue="FFF08A3F" position="0"/>
@@ -159,7 +166,14 @@
             </Fill>
         </Shape>
         <Shape x="200" y="110" name="earL" id="0:51">
-            <Triangle originX="0.5" originY="0.5" width="40" height="80" name="earLPath"/>
+            <!-- 2026 trend: curved fox-ear shape (mirrored from earR). -->
+            <PointsPath isClosed="true" isClockwise="true" name="earLPath">
+                <StraightVertex x="-14" y="38" radius="10"/>
+                <StraightVertex x="14" y="38" radius="10"/>
+                <CubicMirroredVertex x="7" y="0" rotation="-0.4" distance="22"/>
+                <CubicMirroredVertex x="0" y="-42" rotation="0" distance="8"/>
+                <CubicMirroredVertex x="-7" y="0" rotation="0.4" distance="22"/>
+            </PointsPath>
             <Fill name="earLFill">
                 <LinearGradient startX="0" startY="-40" endX="0" endY="40" name="earLGrad">
                     <GradientStop colorValue="FFF08A3F" position="0"/>
