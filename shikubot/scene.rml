@@ -305,6 +305,12 @@
             <StateMachineTrigger name="goDisco" id="0:403"/>
             <StateMachineTrigger name="goRocket" id="0:404"/>
             <StateMachineTrigger name="goHypno" id="0:405"/>
+            <!-- TASK STATE TRIGGERS (Novra case study) -->
+            <StateMachineTrigger name="goWorking" id="0:500"/>
+            <StateMachineTrigger name="goUpload" id="0:501"/>
+            <StateMachineTrigger name="goError" id="0:502"/>
+            <StateMachineTrigger name="goFinished" id="0:503"/>
+            <StateMachineTrigger name="goGreeting" id="0:504"/>
 
             <StateMachineLayer name="StateSequencing" id="0:120">
                 <!-- AnyState: transitions here fire from ANY state. Used for
@@ -330,6 +336,21 @@
                     </StateTransition>
                     <StateTransition stateToId="0:415">
                         <TransitionTriggerCondition inputId="0:405"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:510">
+                        <TransitionTriggerCondition inputId="0:500"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:511">
+                        <TransitionTriggerCondition inputId="0:501"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:512">
+                        <TransitionTriggerCondition inputId="0:502"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:513">
+                        <TransitionTriggerCondition inputId="0:503"/>
+                    </StateTransition>
+                    <StateTransition stateToId="0:514">
+                        <TransitionTriggerCondition inputId="0:504"/>
                     </StateTransition>
                 </AnyState>
                 <ExitState x="800" y="-120"/>
@@ -490,6 +511,27 @@
 
                 <!-- hypno: 5s loop. Eyes become swirling spirals, glasses spin. -->
                 <AnimationState animationId="0:425" id="0:415" x="640" y="0"/>
+
+                <!-- ============================================================
+                     TASK STATES (Novra case study: "A character needs more
+                     than working and done"). These make the logo FUNCTIONAL
+                     as an app status indicator.
+                     ============================================================ -->
+
+                <!-- working: 6s loop. Focused, subtle typing motion, slow wag. -->
+                <AnimationState animationId="0:520" id="0:510" x="160" y="480"/>
+
+                <!-- upload: 3s loop. Looking up, eyes wide, watching progress. -->
+                <AnimationState animationId="0:521" id="0:511" x="320" y="480"/>
+
+                <!-- error: 2s loop. Startled-held, glasses crooked, grimace. -->
+                <AnimationState animationId="0:522" id="0:512" x="480" y="480"/>
+
+                <!-- finished: 4s loop. Big smile, satisfied, sparkles. -->
+                <AnimationState animationId="0:523" id="0:513" x="640" y="480"/>
+
+                <!-- greeting: 2s loop. Ear wiggle wave, happy smile, bounce. -->
+                <AnimationState animationId="0:524" id="0:514" x="640" y="320"/>
             </StateMachineLayer>
         </StateMachine>
 
@@ -518,5 +560,12 @@
         <LinearAnimation loopValue="loop" duration="240" name="anim_disco" id="0:423"/>
         <LinearAnimation loopValue="oneShot" duration="180" name="anim_rocket" id="0:424"/>
         <LinearAnimation loopValue="loop" duration="300" name="anim_hypno" id="0:425"/>
+
+        <!-- TASK STATE ANIMATIONS (Novra case study) -->
+        <LinearAnimation loopValue="loop" duration="360" name="anim_working" id="0:520"/>
+        <LinearAnimation loopValue="loop" duration="180" name="anim_upload" id="0:521"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_error" id="0:522"/>
+        <LinearAnimation loopValue="loop" duration="240" name="anim_finished" id="0:523"/>
+        <LinearAnimation loopValue="loop" duration="120" name="anim_greeting" id="0:524"/>
     </Artboard>
 </Rive>

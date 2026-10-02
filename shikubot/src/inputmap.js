@@ -51,6 +51,15 @@ export const INPUTMAP = Object.freeze({
   goDisco:        { type: 'trigger' },   // body hue-cycles, glasses flash rainbow, sparkle storm
   goRocket:       { type: 'trigger' },   // Shiku shoots upward with flame trail, then falls back
   goHypno:        { type: 'trigger' },   // eyes become swirling spirals, glasses spin
+
+  // ── TASK STATES (Novra case study: "A character needs more than working and done")
+  // These make the logo FUNCTIONAL as an app status indicator — Shiku communicates
+  // what the app is doing, not just how it feels.
+  goWorking:      { type: 'trigger' },   // focused, subtle typing motion, slow wag
+  goUpload:       { type: 'trigger' },   // looking up, eyes wide, watching something upload
+  goError:        { type: 'trigger' },   // startled-held, glasses crooked, grimace
+  goFinished:     { type: 'trigger' },   // big smile, satisfied, sparkles
+  goGreeting:     { type: 'trigger' },   // ear wiggle wave, happy smile, slight bounce
 });
 
 /**
@@ -64,6 +73,8 @@ export const STATE_NAMES = Object.freeze([
   'idle', 'curious', 'excited', 'startled', 'sleepy', 'confused',
   // Funky extensions (Phase 4)
   'orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno',
+  // Task states (Novra case study: functional app status)
+  'working', 'upload', 'error', 'finished', 'greeting',
 ]);
 
 /**

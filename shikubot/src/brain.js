@@ -1153,6 +1153,43 @@ class Brain {
         this._hypnoSwirls = null;
         this.spawnHypnoSwirls();
         break;
+
+      // ── TASK STATES (Novra case study) ────────────────────────────
+      case 'working':
+        // Focused, subtle typing motion, slow wag. No funky particles.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        break;
+      case 'upload':
+        // Looking up, eyes wide, watching progress.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        break;
+      case 'error':
+        // Startled-held, glasses crooked, grimace. Brief red flash.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.glassesSpring.pos = 1.2;  // glasses knocked up
+        this.glassesSpring.target = 0;
+        this.glassesSpring.vel = 0;
+        this.spawnStarBurst();  // brief error flash
+        break;
+      case 'finished':
+        // Big smile, satisfied, sparkles.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        this.spawnSparkles(12);  // celebration sparkles
+        break;
+      case 'greeting':
+        // Ear wiggle wave, happy smile, slight bounce.
+        this._orbitRings = null;
+        this._cometRibbons = null;
+        this._hypnoSwirls = null;
+        break;
     }
     // Clear funky extended state when leaving them.
     if (!['orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno'].includes(name)) {
@@ -1437,16 +1474,72 @@ class Brain {
         break;
 
       case 'hypno':
-        // Eyes become swirling spirals, glasses spin.
-        // The hypno swirls are particles (HypnoSwirl class) positioned at the eye centers.
-        this.target.lidL = 0;  // eyes fully open to show swirls
+        this.target.lidL = 0;
         this.target.lidR = 0;
-        this.target.earL = 0;  // neutral ears
+        this.target.earL = 0;
         this.target.earR = 0;
-        this.target.wagSpeed = 0.2;  // slow hypnotic wag
-        // Don't move gaze — let the swirl particles do the work
+        this.target.wagSpeed = 0.2;
         this.target.gazeX = 0;
         this.target.gazeY = 0;
+        break;
+
+      // ── TASK STATES (Novra case study: functional app status) ─────
+      case 'working':
+        // Focused, subtle typing motion, slow wag. Per Novra: "A character
+        // needs more than working and done."
+        this.target.lidL = 0.15;  // slightly squinting (focused)
+        this.target.lidR = 0.15;
+        this.target.earL = 0.3;  // ears slightly perked (alert)
+        this.target.earR = 0.3;
+        this.target.wagSpeed = 0.2;  // slow thoughtful wag
+        this.target.mouthOpen = 0.1 + 0.08 * Math.sin(this.clock * 4 * TAU);  // subtle typing motion (4Hz)
+        this.target.smile = 0.1;  // slight focused smile
+        break;
+
+      case 'upload':
+        // Looking up, eyes wide, watching progress. Per Novra: "Upload" state.
+        this.target.lidL = 0;  // wide eyes
+        this.target.lidR = 0;
+        this.target.gazeY = -0.6;  // looking up
+        this.target.earL = 0.5;
+        this.target.earR = 0.5;
+        this.target.wagSpeed = 0;  // tail still (waiting)
+        this.target.mouthOpen = 0.3;  // small "ooh"
+        break;
+
+      case 'error':
+        // Startled-held, glasses crooked, grimace. Per Novra: "Error" state.
+        this.target.lidL = 0;  // wide eyes (shock)
+        this.target.lidR = 0;
+        this.target.earL = -0.8;  // ears back
+        this.target.earR = -0.8;
+        this.target.wagSpeed = 0;
+        this.target.smile = -0.5;  // grimace
+        this.target.mouthOpen = 0.4;  // open in shock
+        break;
+
+      case 'finished':
+        // Big smile, satisfied, sparkles. Per Novra: "Finished" state.
+        this.target.lidL = 0;  // bright eyes
+        this.target.lidR = 0;
+        this.target.earL = 0.8;  // ears up (happy)
+        this.target.earR = 0.8;
+        this.target.wagSpeed = 0.6;  // happy wag
+        this.target.smile = 0.8;  // big smile
+        this.target.mouthOpen = 0.2;  // slight open (content)
+        break;
+
+      case 'greeting':
+        // Ear wiggle wave, happy smile, slight bounce. Per Novra: "Greeting" state.
+        this.target.lidL = 0;
+        this.target.lidR = 0;
+        // Ear wiggle: alternate L/R at 3Hz (wave-like)
+        const wavePhase = this.clock * 3 * TAU;
+        this.target.earL = Math.sin(wavePhase) * 0.6;
+        this.target.earR = Math.sin(wavePhase + Math.PI) * 0.6;
+        this.target.wagSpeed = 0.5;  // happy wag
+        this.target.smile = 0.6;  // happy smile
+        this.target.mouthOpen = 0.15;
         break;
     }
   }
@@ -1928,6 +2021,18 @@ export function createBrain(opts) {
     dance:      () => brain.go('disco'),
     spin:       () => brain.go('rocket'),
     hypnotize:  () => brain.go('hypno'),
+    // ── TASK STATE API (Novra case study: functional app status) ──────
+    // These make Shiku a functional status indicator, not just a cute logo.
+    //   shiku.working()  → focused, typing motion (app is processing)
+    //   shiku.upload()   → looking up, watching progress (uploading)
+    //   shiku.error()    → startled-held, grimace (something went wrong)
+    //   shiku.finished() → big smile, sparkles (task complete)
+    //   shiku.greet()    → ear wiggle wave, happy bounce (welcome)
+    working:    () => brain.go('working'),
+    upload:     () => brain.go('upload'),
+    error:      () => brain.go('error'),
+    finished:   () => brain.go('finished'),
+    greet:      () => brain.go('greeting'),
     // Random funky state — for "surprise me" button
     surprise: () => {
       const funky = ['orbit', 'comet', 'burst', 'disco', 'rocket', 'hypno'];
