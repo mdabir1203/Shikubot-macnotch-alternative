@@ -19,6 +19,6 @@
     "@rive-app/canvas-advanced": "2.23.0"
   },
   "devDependencies": {
-    "vite": "5.4.10"
+    "vite": "6.4.3"
   }
 }
