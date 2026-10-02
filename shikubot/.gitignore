@@ -8,8 +8,7 @@ node_modules/
 .rive-cache/
 
 # PRIVATE — never commit
-# Per master prompt: artwork © Sesame Workshop; .riv, frames, and traced
-# assets stay in the private showcase, no public repo, no commercial use.
+# Artwork © Sesame Workshop; .riv, frames, and traced assets stay private.
 assets/frames/*.png
 assets/frames/*.jpg
 assets/frames/*.jpeg
@@ -18,6 +17,11 @@ build/*.riv
 build/*.rev
 *.riv
 *.rev
+
+# Runtime assets (installed via npm + postinstall script)
+public/rive.wasm
+public/rive-basic.js
+public/shikubot.riv
 
 # Editor / OS
 .DS_Store

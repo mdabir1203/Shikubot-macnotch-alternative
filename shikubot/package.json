@@ -1,17 +1,18 @@
 {
   "name": "shikubot",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "Shiku — interactive mascot (Rive body via CLI + JS brain). Private educational showcase.",
+  "description": "Shiku — dynamic logo mascot. Communicates app activity through 17 character states. Rive CLI body + JS brain with hybrid spring/ease-out physics.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "serve": "vite build && npx serve dist",
-    "rive:build": "/home/z/my-project/bin/rive . --once",
-    "rive:verify": "/home/z/my-project/bin/rive . --verify",
-    "rive:inspect": "/home/z/my-project/bin/rive inspect . --summary"
+    "postinstall": "node scripts/setup-assets.mjs",
+    "rive:build": "rive . --once",
+    "rive:verify": "rive . --verify",
+    "rive:inspect": "rive inspect . --summary"
   },
   "dependencies": {
     "@rive-app/canvas": "2.23.0",
